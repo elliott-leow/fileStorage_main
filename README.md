@@ -6,12 +6,13 @@
 ### Action Endpoints
 
 ### POST /upload/<path:filename>
-Purpose: Uploads a single file to the specified path.
+Purpose: Uploads a file to the specified path. The path can include subdirectories, and they will be created automatically if they don't exist.
 Method: POST
 Authentication: Requires an X-Upload-Key header.
-If uploading to a protected directory, this must be the folder-specific key.
-Otherwise, this must be the global KEY from the .env file.
+- If uploading to a protected directory, this must be the folder-specific key.
+- Otherwise, this must be the global KEY from the .env file.
 Request Body: The raw binary data of the file to upload.
+Note: The web UI supports uploading multiple files and entire folders. For folder uploads, the folder structure is preserved using the file's relative path.
 Example CURL:
 ```
   # Upload 'local_image.jpg' to the '/images' folder on the server
@@ -19,6 +20,12 @@ Example CURL:
        -H "X-Upload-Key: UPLOAD_KEY" \
        -H "Content-Type: application/octet-stream" \
        --data-binary @"/path/to/your/local_image.jpg"
+
+  # Upload to a nested path (subdirectories will be created)
+  curl -X POST http://localhost:8000/upload/documents/2024/report.pdf \
+       -H "X-Upload-Key: UPLOAD_KEY" \
+       -H "Content-Type: application/octet-stream" \
+       --data-binary @"/path/to/report.pdf"
 ```
 
 ### POST /validate-key
@@ -114,6 +121,97 @@ Example CURL:
   curl -X POST http://localhost:8000/api/toggle-hidden \
        -H "Content-Type: application/json" \
        -d '{"path": "images", "key": "HIDE_KEY", "hide": false}'
+```
+
+### POST /api/toggle-view-hidden
+Purpose: Toggles the session setting to show or hide all hidden folders in directory listings. When enabled, hidden folders become visible in listings and search results.
+Method: POST
+Authentication: Requires the HIDDEN_KEY from the .env file, provided in the JSON body.
+Request Body (JSON):
+```
+  {
+      "key": "the_hidden_key"
+  }
+```
+Response (JSON):
+```
+  {
+      "status": "success",
+      "message": "Hidden folders are now visible.",
+      "show_hidden": true
+  }
+```
+Example CURL:
+```
+  # Enable viewing hidden folders
+  curl -X POST http://localhost:8000/api/toggle-view-hidden \
+       -H "Content-Type: application/json" \
+       -d '{"key": "HIDE_KEY"}' \
+       -c cookies.txt # Save session cookie
+```
+
+### POST /api/create-folder
+Purpose: Creates a new folder at the specified path.
+Method: POST
+Authentication: Requires the global KEY (UPLOAD_API_KEY) from the .env file, provided in the JSON body.
+Request Body (JSON):
+```
+  {
+      "parent_path": "path/to/parent",
+      "folder_name": "new_folder_name",
+      "key": "upload_key"
+  }
+```
+Response (JSON):
+```
+  {
+      "status": "success",
+      "message": "Folder created successfully."
+  }
+```
+Example CURL:
+```
+  # Create a folder named 'documents' in the root
+  curl -X POST http://localhost:8000/api/create-folder \
+       -H "Content-Type: application/json" \
+       -d '{"parent_path": "", "folder_name": "documents", "key": "UPLOAD_KEY"}'
+
+  # Create a folder named '2024' inside 'documents'
+  curl -X POST http://localhost:8000/api/create-folder \
+       -H "Content-Type: application/json" \
+       -d '{"parent_path": "documents", "folder_name": "2024", "key": "UPLOAD_KEY"}'
+```
+
+### POST /api/set-path-protection
+Purpose: Sets password protection for a file or folder path. Once protected, users must provide the password to access the file/folder.
+Method: POST
+Authentication: Requires the global KEY (UPLOAD_API_KEY) from the .env file, provided in the JSON body.
+Request Body (JSON):
+```
+  {
+      "path": "path/to/file_or_folder",
+      "password": "protection_password",
+      "key": "upload_key"
+  }
+```
+Response (JSON):
+```
+  {
+      "status": "success",
+      "message": "Path 'path/to/file_or_folder' is now password protected."
+  }
+```
+Example CURL:
+```
+  # Protect a file
+  curl -X POST http://localhost:8000/api/set-path-protection \
+       -H "Content-Type: application/json" \
+       -d '{"path": "documents/secret.pdf", "password": "secret123", "key": "UPLOAD_KEY"}'
+
+  # Protect a folder (all contents will require the password)
+  curl -X POST http://localhost:8000/api/set-path-protection \
+       -H "Content-Type: application/json" \
+       -d '{"path": "private_docs", "password": "my_password", "key": "UPLOAD_KEY"}'
 ```
 
 ### System Endpoints

@@ -1,3 +1,4 @@
 .env
 folder_keys.json
 venv/
+/public

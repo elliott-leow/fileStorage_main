@@ -44,7 +44,7 @@ if app.secret_key == "dev-insecure-fallback-key":
     print("!!! Set the FLASK_SECRET_KEY environment variable for secure sessions. !!!\n")
 
 
-PUBLIC_DIR = os.path.expanduser("~/public")
+PUBLIC_DIR = os.path.expanduser("./public")
 # Use global key for general uploads and potentially admin actions like rebuild
 UPLOAD_API_KEY = os.getenv("KEY")
 # Key required for deleting files/folders
@@ -102,26 +102,27 @@ def load_folder_keys():
     global PROTECTED_FOLDERS
     protected_config = {}
     try:
-        with open(FOLDER_KEYS_CONFIG_FILE, 'r') as f:
-            config_data = json.load(f)
-            raw_paths = config_data.get('protected_paths', [])
-            sorted_paths = sorted(raw_paths, key=lambda x: len(x.get('path', '')), reverse=True)
+        if os.path.exists(FOLDER_KEYS_CONFIG_FILE):
+            with open(FOLDER_KEYS_CONFIG_FILE, 'r') as f:
+                config_data = json.load(f)
+                raw_paths = config_data.get('protected_paths', [])
+                sorted_paths = sorted(raw_paths, key=lambda x: len(x.get('path', '')), reverse=True)
 
-            for item in sorted_paths:
-                path = item.get('path')
-                key = item.get('key')
-                if path and key:
-                    norm_rel_path = os.path.normpath(path.strip('/'))
-                    protected_config[norm_rel_path] = key
-                else:
-                    print(f"Warning: Invalid entry in {FOLDER_KEYS_CONFIG_FILE}: {item}")
+                for item in sorted_paths:
+                    path = item.get('path')
+                    key = item.get('key')
+                    if path and key:
+                        norm_rel_path = os.path.normpath(path.strip('/'))
+                        protected_config[norm_rel_path] = key
+                    else:
+                        print(f"Warning: Invalid entry in {FOLDER_KEYS_CONFIG_FILE}: {item}")
 
             PROTECTED_FOLDERS = protected_config
             print(f"Loaded {len(PROTECTED_FOLDERS)} protected folder configurations.")
+        else:
+            PROTECTED_FOLDERS = {}
+            print(f"Info: {FOLDER_KEYS_CONFIG_FILE} not found. No folder-specific keys loaded.")
 
-    except FileNotFoundError:
-        print(f"Info: {FOLDER_KEYS_CONFIG_FILE} not found. No folder-specific keys loaded.")
-        PROTECTED_FOLDERS = {}
     except json.JSONDecodeError:
         print(f"Error: Could not decode JSON from {FOLDER_KEYS_CONFIG_FILE}.")
         PROTECTED_FOLDERS = {}
@@ -129,12 +130,28 @@ def load_folder_keys():
         print(f"Error loading folder keys: {e}")
         PROTECTED_FOLDERS = {}
 
+def save_folder_keys():
+    """Saves the current protected folder configurations to JSON file."""
+    try:
+        # Convert PROTECTED_FOLDERS dict to list format
+        protected_paths_list = [{'path': path, 'key': key} for path, key in PROTECTED_FOLDERS.items()]
+        # Sort by path length (longest first) for consistent output
+        protected_paths_list.sort(key=lambda x: len(x.get('path', '')), reverse=True)
+        
+        config_data = {'protected_paths': protected_paths_list}
+        with open(FOLDER_KEYS_CONFIG_FILE, 'w') as f:
+            json.dump(config_data, f, indent=4)
+        return True
+    except Exception as e:
+        print(f"Error saving {FOLDER_KEYS_CONFIG_FILE}: {e}")
+        return False
+
 load_folder_keys() # Load config on startup
 load_hidden_paths() # Load hidden paths config on startup
 
 # app.py
 
-def get_all_directories(start_path_abs, base_path_abs):
+def get_all_directories(start_path_abs, base_path_abs, show_hidden=False):
     """Recursively finds all directory relative paths within the start path."""
     dir_list = []
     try:
@@ -150,7 +167,8 @@ def get_all_directories(start_path_abs, base_path_abs):
             norm_rel_root = os.path.normpath(rel_root) # Get normalized path for check
 
             # Check if path is hidden; if so, don't add it or its children
-            if norm_rel_root != '.' and norm_rel_root in HIDDEN_PATHS:
+            # UNLESS show_hidden is True
+            if not show_hidden and norm_rel_root != '.' and norm_rel_root in HIDDEN_PATHS:
                 dirs[:] = [] # Prevent descending into hidden directory
                 continue
 
@@ -175,7 +193,7 @@ def get_all_directories(start_path_abs, base_path_abs):
     dir_list.sort()
     return dir_list
 
-def find_files_by_name(query, start_dir_abs, base_public_dir, recursive=False):
+def find_files_by_name(query, start_dir_abs, base_public_dir, recursive=False, show_hidden=False):
     """
     Walks directories and finds files/folders matching the query name substring.
     Returns a list of dictionaries, each containing 'rel_path' and basic info.
@@ -215,8 +233,10 @@ def find_files_by_name(query, start_dir_abs, base_public_dir, recursive=False):
                     # We'll rely on the caller to handle adding to a final dictionary/set
                     # Let's filter hidden paths here as well
                     norm_entry_rel_path = os.path.normpath(entry_rel_path)
-                    if norm_entry_rel_path not in HIDDEN_PATHS:
-                        results.append({'rel_path': entry_rel_path, 'abs_path': entry_abs_path, 'name': name})
+                    if show_hidden or norm_entry_rel_path not in HIDDEN_PATHS:
+                        # Normalize path to use forward slashes for display
+                        entry_rel_path_normalized = entry_rel_path.replace(os.sep, '/') if os.sep != '/' else entry_rel_path
+                        results.append({'rel_path': entry_rel_path_normalized, 'abs_path': entry_abs_path, 'name': name})
 
             # Crucial: If not recursive, break *after* processing the first level
             if not recursive and root == start_dir_abs:
@@ -236,24 +256,35 @@ def format_info(entry_path, rel_path):
         is_dir = os.path.isdir(entry_path)
         size = '-' if is_dir else humanize.naturalsize(stat_result.st_size)
         mtime = datetime.fromtimestamp(stat_result.st_mtime).strftime("%Y-%m-%d %H:%M")
-        rel_path_encoded = urllib.parse.quote(rel_path)
+        # Normalize path to use forward slashes for display
+        rel_path_normalized = rel_path.replace(os.sep, '/') if os.sep != '/' else rel_path
+        rel_path_encoded = urllib.parse.quote(rel_path_normalized)
         # Determine if the item itself requires protection to access content
+        # Use original rel_path for key lookup (may have backslashes)
         is_protected = bool(get_required_key_for_path(rel_path))
+        # Check if this path is hidden (normalize for comparison)
+        norm_rel_path_for_check = os.path.normpath(rel_path)
+        is_hidden = norm_rel_path_for_check in HIDDEN_PATHS
         return {
             'is_dir': is_dir,
             'size': size,
             'mtime': mtime,
-            'rel_path': rel_path,
+            'rel_path': rel_path_normalized,  # Use normalized path with forward slashes
             'rel_path_encoded': rel_path_encoded,
             'is_protected': is_protected, # Add protection status
+            'is_hidden': is_hidden, # Add hidden status
             'error': False
          }
     except OSError as e:
         print(f"Warning: Could not stat {entry_path}: {e}")
+        # Normalize path to use forward slashes for display
+        rel_path_normalized = rel_path.replace(os.sep, '/') if os.sep != '/' else rel_path
+        norm_rel_path_for_check = os.path.normpath(rel_path)
+        is_hidden = norm_rel_path_for_check in HIDDEN_PATHS
         return {
             'is_dir': False, 'size': 'N/A', 'mtime': 'N/A',
-            'rel_path': rel_path, 'rel_path_encoded': urllib.parse.quote(rel_path),
-            'is_protected': False, 'error': True # Assume not protected if error
+            'rel_path': rel_path_normalized, 'rel_path_encoded': urllib.parse.quote(rel_path_normalized),
+            'is_protected': False, 'is_hidden': is_hidden, 'error': True # Assume not protected if error
         }
 
 def check_path_safety(path_abs):
@@ -430,6 +461,8 @@ def serve(path):
 
     # --- Handle Directory/Search ---
     if os.path.isdir(current_path_abs):
+        
+        show_hidden_files = session.get('show_hidden', False)
 
         # Determine Title (using unquoted path)
         current_display_path = relative_path_unquoted.strip('/')
@@ -473,7 +506,7 @@ def serve(path):
 
                 # 2. Filename/Foldername Search (always recursive from root for smart search)
                 print(f"Performing filename search for smart query: '{smart_query}' (recursive from root)")
-                filename_raw = find_files_by_name(smart_query, PUBLIC_DIR, PUBLIC_DIR, recursive=True)
+                filename_raw = find_files_by_name(smart_query, PUBLIC_DIR, PUBLIC_DIR, recursive=True, show_hidden=show_hidden_files)
                 for item in filename_raw:
                     if item['rel_path'] not in filename_results_map:
                         filename_results_map[item['rel_path']] = item
@@ -485,21 +518,22 @@ def serve(path):
                     # Basic safety/existence check
                     if not check_path_safety(abs_path) or not os.path.exists(abs_path): continue
                     
-                    # Also check if hidden
-                    if os.path.normpath(rel_path) in HIDDEN_PATHS: continue
+                    # Also check if hidden (unless show_hidden_files is True)
+                    if not show_hidden_files and os.path.normpath(rel_path) in HIDDEN_PATHS: continue
 
-                    if rel_path not in temp_entries:
-                        info = format_info(abs_path, rel_path) # format_info adds is_protected
+                    info = format_info(abs_path, rel_path) # format_info adds is_protected and normalizes slashes
+                    normalized_rel_path = info['rel_path']  # Get normalized path with forward slashes
+                    if normalized_rel_path not in temp_entries:
                         if not info['error']:
                             info['score'] = f"{score:.2f}"
-                            info['display_name'] = os.path.basename(rel_path)
-                            info['matched_name'] = rel_path in filename_results_map # Check if name also matched
-                            temp_entries[rel_path] = info
+                            info['display_name'] = os.path.basename(normalized_rel_path)
+                            info['matched_name'] = normalized_rel_path in filename_results_map # Check if name also matched
+                            temp_entries[normalized_rel_path] = info
 
                 # Add filename results not already present
                 for rel_path, item_data in filename_results_map.items():
                      if rel_path not in temp_entries:
-                          # The find_files_by_name function already filters hidden paths, so no need to check again here
+                          # The find_files_by_name function already filters hidden paths (if show_hidden=False), so no need to check again here
                           abs_path = item_data['abs_path']
                           if not os.path.exists(abs_path) and not os.path.islink(abs_path): continue
                           info = format_info(abs_path, rel_path)
@@ -529,19 +563,19 @@ def serve(path):
                 print(f"Performing filename filter: '{filename_search_query}', Recursive: {recursive}, Start: {search_start_abs}")
 
                 # Use the helper function
-                filename_results_raw = find_files_by_name(filename_search_query, search_start_abs, PUBLIC_DIR, recursive=recursive)
+                filename_results_raw = find_files_by_name(filename_search_query, search_start_abs, PUBLIC_DIR, recursive=recursive, show_hidden=show_hidden_files)
 
                 # Populate final entries dictionary directly
                 for item in filename_results_raw:
-                    rel_path = item['rel_path']
+                    rel_path = item['rel_path']  # Already normalized with forward slashes from find_files_by_name
                     if rel_path not in entries: # Prevent duplicates
                         abs_path = item['abs_path']
-                        info = format_info(abs_path, rel_path) # format_info adds is_protected
+                        info = format_info(abs_path, rel_path) # format_info adds is_protected and normalizes slashes
                         if not info['error']:
                             info['display_name'] = item['name']
                             info['score'] = None # No score
                             info['matched_name'] = True # Matched name by definition
-                            entries[rel_path] = info
+                            entries[info['rel_path']] = info  # Use normalized path from format_info
                 # Note: These results will be sorted alphabetically later
 
             # --- Normal Directory Listing ---
@@ -555,14 +589,15 @@ def serve(path):
                          if ent_path_rel == '.': ent_path_rel = '' # Handle case where join results in '.'
 
                          # --- Check if Hidden ---
-                         if ent_path_rel in HIDDEN_PATHS:
+                         if not show_hidden_files and ent_path_rel in HIDDEN_PATHS:
                              continue
 
                          if ent_path_rel not in entries: # Should not happen with listdir, but safe check
-                            info = format_info(ent_path_abs, ent_path_rel) # format_info adds is_protected
+                            info = format_info(ent_path_abs, ent_path_rel) # format_info adds is_protected and normalizes slashes
                             if not info['error']:
                                 info['display_name'] = name
-                                entries[ent_path_rel] = info # Use unique relative path as key
+                                # Use normalized path (with forward slashes) as key
+                                entries[info['rel_path']] = info
                  except OSError as e:
                       print(f"Error listing directory {current_path_abs}: {e}")
                       title += " (Error Listing Directory)"
@@ -580,6 +615,9 @@ def serve(path):
              # Sort filename filter or directory listing results alphabetically
              sorted_entries_for_template = dict(sorted(entries.items(), key=lambda item: item[1]['display_name'].lower()))
 
+        # Normalize current_path to use forward slashes for display
+        current_path_display = norm_current_path.replace(os.sep, '/') if os.sep != '/' else norm_current_path
+        
         return render_template(
             'index.html',
             title=title,
@@ -592,10 +630,11 @@ def serve(path):
             is_smart_search_results=is_smart_search_results,
             semantic_search_enabled=MODEL_LOADED,
             permission_denied=permission_denied, # Pass denied status
-            current_path=norm_current_path, # Pass normalized, unquoted path
+            current_path=current_path_display, # Pass normalized path with forward slashes
             delete_key_configured=DELETE_KEY_CONFIGURED, # Pass delete key status
             hidden_key_configured=HIDDEN_KEY_CONFIGURED,
-            is_current_path_hidden=is_current_path_hidden
+            is_current_path_hidden=is_current_path_hidden,
+            show_hidden_files=show_hidden_files # Pass show_hidden status
         )
     else:
         # Path exists, is safe, but not a file or directory? Unexpected.
@@ -857,6 +896,139 @@ def api_toggle_hidden():
             HIDDEN_PATHS.add(norm_path)
         return jsonify(error="Failed to save visibility state."), 500
 
+
+@app.route('/api/toggle-view-hidden', methods=['POST'])
+def api_toggle_view_hidden():
+    """Endpoint to toggle the session 'show_hidden' state."""
+    data = request.get_json()
+    provided_key = data.get('key')
+    
+    # We use the HIDDEN_KEY for this feature as well, as it relates to viewing hidden stuff.
+    if not HIDDEN_KEY_CONFIGURED:
+         return jsonify(error="Hidden folders feature not configured."), 501
+         
+    if provided_key != HIDDEN_KEY:
+        return jsonify(error="Invalid key."), 401
+        
+    current_state = session.get('show_hidden', False)
+    new_state = not current_state
+    session['show_hidden'] = new_state
+    session.modified = True
+    
+    message = "Hidden folders are now visible." if new_state else "Hidden folders are now hidden."
+    return jsonify(status="success", message=message, show_hidden=new_state)
+
+@app.route('/api/create-folder', methods=['POST'])
+def api_create_folder():
+    """Endpoint to create a new folder."""
+    data = request.get_json()
+    if not data: return jsonify(error="Invalid request"), 400
+    
+    parent_path = data.get('parent_path', '')
+    folder_name = data.get('folder_name', '')
+    provided_key = data.get('key')
+    protection_password = data.get('protection_password')  # Optional protection password
+    
+    # Validation
+    if not folder_name:
+        return jsonify(error="Folder name is required."), 400
+    if not provided_key:
+        return jsonify(error="API Key is required."), 401
+        
+    # Check Key (Use UPLOAD_API_KEY for creation/write access)
+    if not UPLOAD_API_KEY:
+        return jsonify(error="Server upload/write key not configured."), 501
+    if provided_key != UPLOAD_API_KEY:
+        return jsonify(error="Invalid API Key."), 401
+
+    # Sanitize inputs
+    safe_folder_name = secure_filename(folder_name)
+    if not safe_folder_name:
+        return jsonify(error="Invalid folder name."), 400
+        
+    norm_parent_path = os.path.normpath(parent_path.strip('/'))
+    if norm_parent_path == '.': norm_parent_path = ''
+    
+    # Construct absolute path
+    new_folder_rel_path = os.path.join(norm_parent_path, safe_folder_name)
+    new_folder_abs_path = os.path.normpath(os.path.join(PUBLIC_DIR, new_folder_rel_path))
+    
+    # Normalize relative path for protection (use forward slashes)
+    new_folder_rel_path_normalized = new_folder_rel_path.replace(os.sep, '/') if os.sep != '/' else new_folder_rel_path
+    
+    # Safety Check
+    if not check_path_safety(new_folder_abs_path):
+        return jsonify(error="Forbidden path."), 403
+        
+    if os.path.exists(new_folder_abs_path):
+        return jsonify(error="Folder already exists."), 409
+        
+    try:
+        os.makedirs(new_folder_abs_path)
+        print(f"Created new folder: {new_folder_abs_path}")
+        
+        # If protection password is provided, set protection for the folder
+        if protection_password:
+            PROTECTED_FOLDERS[new_folder_rel_path_normalized] = protection_password
+            save_folder_keys()
+            print(f"Set password protection for folder: {new_folder_rel_path_normalized}")
+        
+        return jsonify(status="success", message="Folder created successfully."), 201
+    except OSError as e:
+        print(f"Error creating folder {new_folder_abs_path}: {e}")
+        return jsonify(error=f"OS Error: {e.strerror}"), 500
+    except Exception as e:
+        print(f"Unexpected error creating folder: {e}")
+        return jsonify(error="Unexpected error."), 500
+
+@app.route('/api/set-path-protection', methods=['POST'])
+def api_set_path_protection():
+    """Endpoint to set password protection for a file or folder path."""
+    data = request.get_json()
+    if not data: return jsonify(error="Invalid request"), 400
+    
+    path_to_protect = data.get('path', '')
+    protection_password = data.get('password', '')
+    provided_key = data.get('key')  # Admin key to authorize this action
+    
+    # Validation
+    if not path_to_protect:
+        return jsonify(error="Path is required."), 400
+    if not protection_password:
+        return jsonify(error="Protection password is required."), 400
+    if not provided_key:
+        return jsonify(error="API Key is required."), 401
+        
+    # Check Key (Use UPLOAD_API_KEY for admin actions)
+    if not UPLOAD_API_KEY:
+        return jsonify(error="Server upload/write key not configured."), 501
+    if provided_key != UPLOAD_API_KEY:
+        return jsonify(error="Invalid API Key."), 401
+
+    # Normalize and validate path
+    norm_path = os.path.normpath(path_to_protect.strip('/'))
+    if norm_path == '.' or norm_path == '':
+        return jsonify(error="Cannot protect root directory."), 400
+    
+    # Safety check - ensure path exists and is within PUBLIC_DIR
+    abs_path = os.path.normpath(os.path.join(PUBLIC_DIR, norm_path))
+    if not check_path_safety(abs_path):
+        return jsonify(error="Forbidden path."), 403
+    if not os.path.exists(abs_path):
+        return jsonify(error="Path does not exist."), 404
+    
+    # Add to protected folders
+    global PROTECTED_FOLDERS
+    PROTECTED_FOLDERS[norm_path] = protection_password
+    
+    # Save to file
+    if save_folder_keys():
+        print(f"Path '{norm_path}' is now password protected.")
+        return jsonify(status="success", message=f"Path '{norm_path}' is now password protected."), 200
+    else:
+        # Revert change if save fails
+        PROTECTED_FOLDERS.pop(norm_path, None)
+        return jsonify(error="Failed to save protection configuration."), 500
 
 # --- API Endpoint for Deleting Items ---
 @app.route('/api/delete-items', methods=['POST'])

@@ -1,0 +1,209 @@
+/* File Browser Styles */
+
+/* Modal styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease;
+}
+
+.modal-content {
+    background-color: white;
+    padding: 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    width: 90%;
+    max-width: 400px;
+    transform: translateY(-20px) scale(0.95);
+    transition: transform 0.3s ease;
+}
+
+.dark .modal-content {
+    background-color: #1f2937;
+}
+
+.modal-overlay.active .modal-content {
+    transform: translateY(0) scale(1);
+}
+
+/* Lock icon styling */
+.lock-icon {
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    margin-left: 0.3em;
+    opacity: 0.6;
+    vertical-align: baseline;
+    flex-shrink: 0;
+}
+
+/* List item hover transition */
+li a:hover {
+    transition: background-color 0.2s ease-in-out;
+}
+
+/* Delete mode styles */
+.delete-checkbox {
+    display: none;
+    margin-right: 0.75rem;
+    width: 1rem;
+    height: 1rem;
+    accent-color: #ef4444;
+}
+
+body.delete-mode .delete-checkbox {
+    display: inline-block;
+}
+
+#delete-controls {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+    gap: 0.75rem;
+    justify-content: flex-end;
+}
+
+.dark #delete-controls {
+    border-color: #4b5563;
+}
+
+body.delete-mode #delete-controls {
+    display: flex;
+}
+
+body.delete-mode #normal-actions {
+    display: none;
+}
+
+/* Delete key modal sizing */
+#deleteKeyModal .modal-content {
+    max-width: 400px;
+}
+
+/* Upload page specific styles */
+#upload-progress-bar {
+    height: 8px;
+    background-color: #e5e7eb;
+    border-radius: 4px;
+    overflow: hidden;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.dark #upload-progress-bar {
+    background-color: #4b5563;
+}
+
+#upload-progress-bar > div {
+    height: 100%;
+    background-color: #3b82f6;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+#folder-input-container {
+    display: none;
+}
+
+/* Upload modal styles */
+.modal-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.dark .modal-header {
+    border-color: #4b5563;
+}
+
+.modal-body {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    min-height: 150px;
+}
+
+.modal-footer {
+    padding-top: 1rem;
+    border-top: 1px solid #e5e7eb;
+}
+
+.dark .modal-footer {
+    border-color: #4b5563;
+}
+
+.folder-list-item {
+    cursor: pointer;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+}
+
+.folder-list-item:hover {
+    background-color: #f3f4f6;
+}
+
+.dark .folder-list-item:hover {
+    background-color: #374151;
+}
+
+.folder-list-item.selected {
+    background-color: #dbeafe;
+    font-weight: 500;
+}
+
+.dark .folder-list-item.selected {
+    background-color: #1e40af;
+}
+
+#modalLoading {
+    text-align: center;
+    padding: 1rem;
+    color: #6b7280;
+}
+
+.dark #modalLoading {
+    color: #9ca3af;
+}
+
+#modalError {
+    color: #ef4444;
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.dark #modalError {
+    color: #f87171;
+}
+
+#modalPasswordPrompt {
+    display: none;
+    padding: 1rem;
+    border-top: 1px solid #e5e7eb;
+    margin-top: 1rem;
+}
+
+.dark #modalPasswordPrompt {
+    border-color: #4b5563;
+}
+
+

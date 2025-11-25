@@ -160,11 +160,17 @@
 
         <!-- Progress Bar Area -->
         <div id="progress-container" class="hidden space-y-1">
-            <div class="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-400">
-                 <span id="progress-label">Upload Progress</span>
-                 <span id="progress-percentage">0%</span>
+            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                <span id="progress-label">Uploading...</span>
+                <span id="progress-percentage">0%</span>
             </div>
-            <div id="upload-progress-bar"><div></div></div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div id="progress-bar-inner" class="bg-blue-600 h-full rounded-full transition-all duration-150" style="width: 0%"></div>
+            </div>
+            <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                <span id="progress-bytes">0 MB / 0 MB</span>
+                <span id="progress-file">File 0 of 0</span>
+            </div>
         </div>
 
         <!-- Submit Button -->
@@ -411,18 +417,60 @@
         }
     }
 
-    // Function to update progress bar
-    function updateProgress(current, total) {
-        if (total > 0) {
-            const percent = Math.round((current / total) * 100);
-            progressContainer.classList.remove('hidden');
-            progressBar.style.width = `${percent}%`;
-            progressPercentage.textContent = `${percent}%`;
-        } else {
-             progressContainer.classList.add('hidden');
-             progressBar.style.width = '0%';
-             progressPercentage.textContent = '0%';
-        }
+    // Progress UI elements
+    const progressBarInner = document.getElementById('progress-bar-inner');
+    const progressLabel = document.getElementById('progress-label');
+    const progressBytes = document.getElementById('progress-bytes');
+    const progressFile = document.getElementById('progress-file');
+
+    // Format bytes to human readable
+    function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+    }
+
+    // Upload a single file with progress tracking
+    function uploadFileWithProgress(file, url, apiKey, onProgress) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable && onProgress) {
+                    onProgress(e.loaded, e.total);
+                }
+            });
+            
+            xhr.addEventListener('load', () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve({ ok: true, status: xhr.status });
+                } else {
+                    resolve({ ok: false, status: xhr.status });
+                }
+            });
+            
+            xhr.addEventListener('error', () => reject(new Error('Network error')));
+            xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+            
+            xhr.open('POST', url);
+            xhr.setRequestHeader('X-Upload-Key', apiKey);
+            xhr.send(file);
+        });
+    }
+
+    // Update progress UI
+    function updateProgressUI(currentFile, totalFiles, fileName, totalLoaded, grandTotal) {
+        progressContainer.classList.remove('hidden');
+        
+        const overallPercent = grandTotal > 0 ? Math.round((totalLoaded / grandTotal) * 100) : 0;
+        
+        if (progressBarInner) progressBarInner.style.width = `${overallPercent}%`;
+        if (progressPercentage) progressPercentage.textContent = `${overallPercent}%`;
+        if (progressBytes) progressBytes.textContent = `${formatBytes(totalLoaded)} / ${formatBytes(grandTotal)}`;
+        if (progressLabel) progressLabel.textContent = `Uploading: ${fileName}`;
+        if (progressFile) progressFile.textContent = `File ${currentFile} of ${totalFiles}`;
     }
 
     // Add event listener for form submission
@@ -448,51 +496,94 @@
             apiKeyInput.focus();
             return;
         }
-         if (/[<>:"|?*]|\.\./.test(baseDestPath)) {
+        if (/[<>:"|?*]|\.\./.test(baseDestPath)) {
             showStatus('Destination path contains invalid characters (e.g., < > : " | ? * ..).', 'error');
             destPathInput.focus();
             return;
         }
 
-        // --- 3. Prepare for Upload ---
+        // --- 3. Calculate total size and prepare for upload ---
+        let grandTotal = 0;
+        for (let i = 0; i < files.length; i++) {
+            grandTotal += files[i].size;
+        }
+
         showStatus('Starting upload...', 'loading');
         uploadButton.disabled = true;
-        updateProgress(0, files.length);
+        progressContainer.classList.remove('hidden');
+        
         let successCount = 0, errorCount = 0;
+        let totalLoaded = 0;
         const totalFiles = files.length;
 
-        // --- 4. Iterate and Upload Each File ---
+        // --- 4. Iterate and Upload Each File with Progress ---
         for (let i = 0; i < totalFiles; i++) {
             const file = files[i];
             const currentFileNum = i + 1;
-            showStatus(`Uploading file ${currentFileNum} of ${totalFiles}: ${file.name}`, 'loading');
+            
             let fileRelativePath;
             if (file.webkitRelativePath) {
-                 const cleanedWebkitPath = file.webkitRelativePath.replace(/\\/g, '/');
-                 fileRelativePath = baseDestPath ? `${baseDestPath}/${cleanedWebkitPath}` : cleanedWebkitPath;
+                const cleanedWebkitPath = file.webkitRelativePath.replace(/\\/g, '/');
+                fileRelativePath = baseDestPath ? `${baseDestPath}/${cleanedWebkitPath}` : cleanedWebkitPath;
             } else {
-                 fileRelativePath = baseDestPath ? `${baseDestPath}/${file.name}` : file.name;
+                fileRelativePath = baseDestPath ? `${baseDestPath}/${file.name}` : file.name;
             }
-            if (/[<>:"|?*]|\.\./.test(fileRelativePath)) { errorCount++; updateProgress(currentFileNum, totalFiles); continue; }
+            
+            if (/[<>:"|?*]|\.\./.test(fileRelativePath)) { 
+                errorCount++; 
+                totalLoaded += file.size;
+                continue; 
+            }
+            
             const encodedFullPath = fileRelativePath.split('/').map(part => encodeURIComponent(part)).join('/');
             const uploadUrl = `/upload/${encodedFullPath}`;
             console.log(`[${currentFileNum}/${totalFiles}] Uploading to ${uploadUrl}`);
+            
+            const fileStartLoaded = totalLoaded;
+            
             try {
-                 const response = await fetch(uploadUrl, { method: 'POST', headers: { 'X-Upload-Key': apiKey, 'Content-Type': 'application/octet-stream' }, body: file });
-                 if (response.ok) { successCount++; } else { errorCount++; console.error(`Failed ${fileRelativePath}: ${response.status}`); }
-             } catch (error) { errorCount++; console.error(`Error ${fileRelativePath}: ${error}`); } finally { updateProgress(currentFileNum, totalFiles); }
+                const result = await uploadFileWithProgress(
+                    file, 
+                    uploadUrl, 
+                    apiKey,
+                    (loaded, total) => {
+                        const currentTotalLoaded = fileStartLoaded + loaded;
+                        updateProgressUI(currentFileNum, totalFiles, file.name, currentTotalLoaded, grandTotal);
+                    }
+                );
+                
+                if (result.ok) { 
+                    successCount++; 
+                } else { 
+                    errorCount++; 
+                    console.error(`Failed ${fileRelativePath}: ${result.status}`); 
+                }
+            } catch (error) { 
+                errorCount++; 
+                console.error(`Error ${fileRelativePath}: ${error}`); 
+            }
+            
+            totalLoaded += file.size;
         }
 
+        // Final progress update
+        updateProgressUI(totalFiles, totalFiles, 'Complete', grandTotal, grandTotal);
+
         // --- 5. Final Status ---
-         if (errorCount === 0) {
+        if (errorCount === 0) {
             showStatus(`Successfully uploaded ${successCount} file(s).`, 'success');
             activeInput.value = '';
-         } else if (successCount > 0) {
-             showStatus(`Completed with ${successCount} successes and ${errorCount} failures.`, 'error');
-         } else {
-             showStatus(`Upload failed. ${errorCount} error(s) occurred. Check console.`, 'error');
-         }
-         setTimeout(() => { progressContainer.classList.add('hidden'); progressBar.style.width = '0%'; progressPercentage.textContent = '0%'; }, 3000);
+        } else if (successCount > 0) {
+            showStatus(`Completed with ${successCount} successes and ${errorCount} failures.`, 'error');
+        } else {
+            showStatus(`Upload failed. ${errorCount} error(s) occurred. Check console.`, 'error');
+        }
+        
+        setTimeout(() => { 
+            progressContainer.classList.add('hidden'); 
+            if (progressBarInner) progressBarInner.style.width = '0%';
+            if (progressPercentage) progressPercentage.textContent = '0%';
+        }, 3000);
 
         // --- 6. Cleanup ---
         uploadButton.disabled = false;

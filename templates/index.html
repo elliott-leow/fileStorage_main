@@ -5,109 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = { darkMode: 'class' };
-    </script>
-    <style>
-        /* Styles for Modal */
-        .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(0, 0, 0, 0.6); /* Semi-transparent black */
-            backdrop-filter: blur(4px); /* Optional blur effect */
-            -webkit-backdrop-filter: blur(4px); /* Safari */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s ease, visibility 0s linear 0.3s;
-        }
-        .modal-overlay.active {
-            opacity: 1;
-            visibility: visible;
-            transition: opacity 0.3s ease;
-        }
-        .modal-content {
-            background-color: white; /* Light mode bg */
-            padding: 1.5rem; /* p-6 */
-            border-radius: 0.5rem; /* rounded-lg */
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); /* shadow-xl */
-            width: 90%;
-            max-width: 400px; /* Limit width */
-            transform: translateY(-20px) scale(0.95); /* Start slightly up and small */
-            transition: transform 0.3s ease;
-        }
-        .dark .modal-content {
-            background-color: #1f2937; /* gray-800 */
-        }
-        .modal-overlay.active .modal-content {
-            transform: translateY(0) scale(1); /* Animate to final position */
-        }
-        /* Lock icon styling */
-        .lock-icon { display: inline-block; width: 0.8em; height: 0.8em; margin-left: 0.3em; opacity: 0.6; vertical-align: baseline; flex-shrink: 0; }
-        /* Other styles */
-        li a:hover { transition: background-color 0.2s ease-in-out; }
-        /* Additional Styles for Delete Mode */
-        .delete-checkbox {
-            display: none; /* Hidden by default */
-            margin-right: 0.75rem; /* space-x-3 equivalent */
-            width: 1rem; height: 1rem; /* h-4 w-4 */
-            accent-color: #ef4444; /* red-500 */
-        }
-        body.delete-mode .delete-checkbox {
-            display: inline-block; /* Show in delete mode */
-        }
-        #delete-controls {
-            display: none; /* Hidden by default */
-            margin-top: 1rem; /* mt-4 */
-            padding-top: 1rem; /* pt-4 */
-            border-top: 1px solid #e5e7eb; /* border-gray-200 */
-            gap: 0.75rem; /* space-x-3 */
-            justify-content: flex-end;
-        }
-        .dark #delete-controls { border-color: #4b5563; /* dark:border-gray-700 */ }
-        body.delete-mode #delete-controls {
-            display: flex; /* Show in delete mode */
-        }
-        /* Hide normal action buttons when delete mode active */
-        body.delete-mode #normal-actions {
-            display: none;
-        }
-         /* Modal Specific Styles (can reuse some from access key modal) */
-         #deleteKeyModal .modal-content { max-width: 400px; } /* Smaller modal for key entry */
-    </style>
+    <script>tailwind.config = { darkMode: 'class' };</script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body class="bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-gray-100 transition-colors duration-300 font-sans">
 <div class="max-w-4xl mx-auto p-4 sm:p-6">
 
-    <!-- Header: Title and Controls -->
+    <!-- Header -->
     <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center space-x-3 min-w-0">
             <h1 class="text-2xl font-bold truncate" title="{{ title }}">{{ title }}</h1>
-            {# --- NEW: Hidden Folder Toggle --- #}
             {% if current_path and hidden_key_configured %}
-            <label for="hidden-toggle" class="flex items-center space-x-1.5 cursor-pointer text-sm text-gray-600 dark:text-gray-400 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Toggle folder visibility in listings">
+            <label for="hidden-toggle" class="flex items-center space-x-1.5 cursor-pointer text-sm text-gray-600 dark:text-gray-400 p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700" title="Toggle folder visibility">
                 <input type="checkbox" id="hidden-toggle" class="h-4 w-4 rounded accent-indigo-600" {% if is_current_path_hidden %}checked{% endif %}>
                 <span>Hidden</span>
             </label>
             {% endif %}
-            {# --- End Hidden Folder Toggle --- #}
         </div>
         <div id="normal-actions" class="flex items-center space-x-2 flex-shrink-0">
-            {# Show delete button only if key is configured on server #}
             {% if delete_key_configured %}
-            <button id="delete-mode-btn" title="Enter Delete Mode" aria-label="Enter Delete Mode" class="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
+            <button id="delete-mode-btn" title="Enter Delete Mode" class="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
             </button>
             {% endif %}
-
-            {# --- NEW: View Hidden Toggle --- #}
             {% if hidden_key_configured %}
-            <button id="view-hidden-btn" title="{% if show_hidden_files %}Hide Hidden Folders{% else %}View All Hidden Folders{% endif %}" aria-label="Toggle Hidden Files Visibility" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if show_hidden_files %}text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900{% else %}text-gray-600 dark:text-gray-400{% endif %}">
+            <button id="view-hidden-btn" title="{% if show_hidden_files %}Hide Hidden Folders{% else %}View All Hidden Folders{% endif %}" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 {% if show_hidden_files %}text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900{% else %}text-gray-600 dark:text-gray-400{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     {% if show_hidden_files %}
                     <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
@@ -118,21 +42,16 @@
                 </svg>
             </button>
             {% endif %}
-
-            {# --- NEW: Create Folder --- #}
-            <button id="create-folder-btn" title="New Folder" aria-label="Create New Folder" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-600 dark:text-gray-400">
+            <button id="create-folder-btn" title="New Folder" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-600 dark:text-gray-400">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
                 </svg>
             </button>
-
-            {# --- NEW: Upload File (Replaces Link) --- #}
-            <button id="upload-file-btn" title="Upload File Here" aria-label="Upload File" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600 dark:text-gray-400">
+            <button id="upload-file-btn" title="Upload File Here" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-600 dark:text-gray-400">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
                 </svg>
             </button>
-
             <button id="theme-toggle" aria-label="Toggle Dark Mode" class="p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <span id="theme-icon">🌙</span>
             </button>
@@ -141,55 +60,41 @@
 
     <!-- Search Forms -->
     <form id="search-form" class="mb-6 space-y-3 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
-        <!-- Row 1: Filename Filter -->
         <div class="flex flex-wrap sm:flex-nowrap items-center gap-3">
             <input id="search" name="search" type="text" placeholder="Filter by name..." value="{{ search_query }}" class="flex-grow p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500 min-w-0">
             <label class="flex items-center space-x-2 whitespace-nowrap cursor-pointer">
-                <input id="recursive" name="recursive" type="checkbox" checked class="accent-blue-500 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <input id="recursive" name="recursive" type="checkbox" checked class="accent-blue-500 h-4 w-4 rounded">
                 <span>Recursive</span>
             </label>
-            <button type="submit" name="submit_filter" value="filter" class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">Filter</button>
+            <button type="submit" name="submit_filter" value="filter" class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">Filter</button>
         </div>
-
-        <!-- Row 2: Semantic/Smart Search -->
         {% if semantic_search_enabled %}
         <div class="flex flex-wrap sm:flex-nowrap items-center gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
             <input id="smart-search" name="smart_query" type="text" placeholder="Smart search content..." value="{{ smart_query }}" class="flex-grow p-2 border rounded bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:ring-purple-500 focus:border-purple-500 min-w-0">
-            <button type="submit" name="submit_smart" value="smart" class="w-full sm:w-auto px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">Smart Search</button>
+            <button type="submit" name="submit_smart" value="smart" class="w-full sm:w-auto px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">Smart Search</button>
         </div>
         {% else %}
         <div class="pt-3 border-t border-gray-200 dark:border-gray-700">
             <p class="text-sm text-gray-500 dark:text-gray-400 italic">Smart search unavailable.</p>
         </div>
         {% endif %}
-
-        <!-- Row 3: Clear Search Button (Conditional) -->
         {% if search_query or smart_query %}
         <div class="pt-3 border-t border-gray-200 dark:border-gray-700 flex justify-end">
-             {# Construct the base URL for the current path #}
-             {% set base_url = '/' + current_path if current_path else '/' %}
-            <a href="{{ base_url }}" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-                Clear Search & Show All
-            </a>
+            <a href="/{{ current_path }}" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600">Clear Search</a>
         </div>
         {% endif %}
     </form>
 
     <!-- Permission Denied Message -->
-     {% if permission_denied %}
+    {% if permission_denied %}
     <div class="p-4 mb-4 text-sm text-yellow-800 bg-yellow-100 rounded-lg dark:bg-gray-800 dark:text-yellow-400 border border-yellow-300 dark:border-yellow-600" role="alert">
-        <svg class="inline flex-shrink-0 mr-3 w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
-        <span class="font-medium">Access Denied!</span> Cannot list contents of <code>/{{ current_path }}</code>. Authenticate by clicking the folder link (if visible) or navigate away.
-        {% if show_parent %}
-            <a href="{{ parent_url }}" class="ml-4 font-medium text-blue-600 dark:text-blue-400 hover:underline">Go to Parent</a>
-        {% endif %}
+        <span class="font-medium">Access Denied!</span> Cannot list contents of <code>/{{ current_path }}</code>.
+        {% if show_parent %}<a href="{{ parent_url }}" class="ml-4 font-medium text-blue-600 dark:text-blue-400 hover:underline">Go to Parent</a>{% endif %}
     </div>
     {% endif %}
 
-
     <!-- File Listing -->
     <ul id="file-list" class="space-y-1.5">
-        <!-- Parent Directory Link -->
         {% if show_parent %}
         <li>
             <a href="{{ parent_url }}" class="flex items-center p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400">
@@ -200,1302 +105,81 @@
             </a>
         </li>
         {% endif %}
-
-        <!-- Message: No Results Found -->
         {% if not entries and (search_query or smart_query) and not permission_denied %}
-        <li class="p-3 text-center text-gray-500 dark:text-gray-400 italic">
-            No files found matching your search criteria.
-        </li>
-        <!-- Message: Directory Empty (and not root, not denied) -->
+        <li class="p-3 text-center text-gray-500 dark:text-gray-400 italic">No files found.</li>
         {% elif not entries and not show_parent and not permission_denied and current_path %}
-        <li class="p-3 text-center text-gray-500 dark:text-gray-400 italic">
-            Directory is empty.
-        </li>
+        <li class="p-3 text-center text-gray-500 dark:text-gray-400 italic">Directory is empty.</li>
         {% endif %}
 
-        <!-- File/Folder Loop -->
         {% for rel_path_key, info in entries.items() %}
-        <li class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-150 ease-in-out"
-            data-name="{{ info.display_name|lower }}"
-            {% if info.is_protected %}data-protected="true"{% endif %}>
-
+        <li class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow" data-name="{{ info.display_name|lower }}" {% if info.is_protected %}data-protected="true"{% endif %}>
             <div class="flex items-center justify-between p-3">
-                {# Checkbox (initially hidden, shown in delete mode) #}
-                <input type="checkbox" class="delete-checkbox" name="delete_item" value="{{ info.rel_path }}" aria-label="Select {{ info.display_name }} for deletion">
-
-                <!-- Left side: Icon, Name, Lock, Score -->
-                 {# Add class to link if it points to a protected directory for JS targeting #}
-                <a href="/{{ info.rel_path_encoded }}"
-                   class="flex items-center space-x-2 min-w-0 group {% if info.is_dir and info.is_protected %}protected-folder-link{% endif %}"
-                   title="/{{ info.rel_path }}">
-
-                    <!-- Icon -->
+                <input type="checkbox" class="delete-checkbox" name="delete_item" value="{{ info.rel_path }}" aria-label="Select {{ info.display_name }}">
+                <a href="/{{ info.rel_path_encoded }}" class="flex items-center space-x-2 min-w-0 group {% if info.is_dir and info.is_protected %}protected-folder-link{% endif %}" title="/{{ info.rel_path }}">
                     <span class="text-xl flex-shrink-0 w-6 text-center relative">
                         {% if info.is_dir %}
-                            {# Differentiate protected folder icon color and hidden folders #}
                             {% if show_hidden_files and info.is_hidden %}
-                                {# Hidden folder icon - use eye icon overlay or different style #}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2,2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2,2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                </svg>
-                                {# Small eye icon overlay to indicate hidden #}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 absolute bottom-0 right-0 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                             {% elif info.is_protected %}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
                             {% else %}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                                </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" /></svg>
                             {% endif %}
                         {% elif info.rel_path.lower().endswith('.pdf') %}
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                        {% elif info.rel_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp', '.tiff', '.tif')) %}
+                        {% elif info.rel_path.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp')) %}
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                         {% else %}
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                         {% endif %}
                     </span>
-                    <!-- Display Name -->
-                    <span class="font-medium text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate folder-name">
-                        {{ info.display_name }}
-                    </span>
-
-                    <!-- Lock Icon for protected items -->
+                    <span class="font-medium text-gray-800 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 truncate folder-name">{{ info.display_name }}</span>
                     {% if info.is_protected %}
-                    <span class="lock-icon text-gray-500 dark:text-gray-400" title="Protected - Requires Key">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
-                        </svg>
+                    <span class="lock-icon text-gray-500 dark:text-gray-400" title="Protected">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-full w-full" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" /></svg>
                     </span>
                     {% endif %}
-
-                    <!-- Score (Smart Search Only) -->
-                    {% if info.score %}
-                    <span class="text-xs px-1.5 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 rounded-full ml-1 flex-shrink-0">
-                        {{ info.score }}
-                    </span>
-                    {% endif %}
-
-                    <!-- *** NEW: Indicator for Name Match in Smart Search *** -->
-                    {% if is_smart_search_results and info.matched_name and not info.score %}
-                        {# Case: Only matched name in smart search #}
-                        <span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full ml-1 flex-shrink-0" title="Matched Name">
-                            Name
-                        </span>
-                    {% elif is_smart_search_results and info.matched_name and info.score %}
-                         {# Case: Matched both content and name #}
-                         <span class="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full ml-1 flex-shrink-0" title="Matched Content & Name">
-                            Both
-                        </span>
-                    {% endif %}
-                    <!-- *** End Name Match Indicator *** -->
+                    {% if info.score %}<span class="text-xs px-1.5 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200 rounded-full ml-1">{{ info.score }}</span>{% endif %}
+                    {% if is_smart_search_results and info.matched_name and not info.score %}<span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full ml-1">Name</span>{% elif is_smart_search_results and info.matched_name and info.score %}<span class="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full ml-1">Both</span>{% endif %}
                 </a>
-
-                <!-- Right side: Size & Date -->
-                <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0 pl-3">
-                    {{ info.size }}<span class="mx-1">•</span>{{ info.mtime }}
-                </span>
+                <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0 pl-3">{{ info.size }}<span class="mx-1">•</span>{{ info.mtime }}</span>
             </div>
-
-            <!-- Conditional Full Path (Shown during search results) -->
             {% if search_query or smart_query %}
-            <div class="text-xs text-gray-500 dark:text-gray-400 px-3 pb-2 pl-12 truncate">
-                <span class="font-mono">/{{ info.rel_path }}</span>
-            </div>
+            <div class="text-xs text-gray-500 dark:text-gray-400 px-3 pb-2 pl-12 truncate"><span class="font-mono">/{{ info.rel_path }}</span></div>
             {% endif %}
         </li>
-        {% endfor %} {# End of file/folder loop #}
+        {% endfor %}
     </ul>
 
-    <!-- Delete Controls (Hidden by default, shown in delete mode) -->
+    <!-- Delete Controls -->
     <div id="delete-controls">
-        <button type="button" id="cancel-delete-mode-btn" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
-            Cancel
-        </button>
-        <button type="button" id="delete-selected-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50">
-            Delete Selected
-        </button>
+        <button type="button" id="cancel-delete-mode-btn" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded hover:bg-gray-200 dark:hover:bg-gray-600">Cancel</button>
+        <button type="button" id="delete-selected-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700 disabled:opacity-50">Delete Selected</button>
     </div>
 
-</div> <!-- End main container -->
-
-
-<!-- Access Key Modal HTML (Initially Hidden) -->
-<div id="accessKeyModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3" id="modalTitle">Enter Access Key</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" id="modalPathLabel"></p>
-        <div>
-            <label for="modalKeyInput" class="sr-only">Access Key</label>
-            <input type="password" name="modalKeyInput" id="modalKeyInput" autocomplete="current-password" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="API Key">
-        </div>
-        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="modalError" aria-live="assertive"></div> <!-- Error message area -->
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="modalCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 sm:text-sm">
-                Cancel
-            </button>
-            <button type="button" id="modalSubmitBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-blue-600 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 sm:text-sm disabled:opacity-50">
-                Submit
-            </button>
-        </div>
-    </div>
 </div>
 
-<!-- Delete Key Modal HTML (New) -->
-<div id="deleteKeyModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3">Enter Delete Key</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Enter the configured key to enable file deletion.</p>
-        <div>
-            <label for="deleteModalKeyInput" class="sr-only">Delete Key</label>
-            <input type="password" name="deleteModalKeyInput" id="deleteModalKeyInput" autocomplete="current-password"
-                   class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Delete Key">
-        </div>
-        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="deleteModalError" aria-live="assertive"></div>
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="deleteModalCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 sm:text-sm">
-                Cancel
-            </button>
-            <button type="button" id="deleteModalSubmitBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-red-600 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 sm:text-sm disabled:opacity-50">
-                Enable Deletion
-            </button>
-        </div>
-    </div>
-</div>
+<!-- Modals -->
+{% include 'partials/modals.html' %}
 
-<!-- Confirm Delete Modal HTML (New) -->
-<div id="confirmDeleteModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-yellow-700 dark:text-yellow-300 mb-3">Confirm Deletion</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4" id="confirmDeleteText">Are you sure you want to delete these items? This action cannot be undone.</p>
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="confirmDeleteCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 sm:text-sm">
-                Cancel
-            </button>
-            <button type="button" id="confirmDeleteConfirmBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-red-600 text-base font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 sm:text-sm">
-                Confirm Delete
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Delete Result Modal HTML (New) -->
-<div id="deleteResultModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3" id="deleteResultTitle">Deletion Result</h3>
-        <div class="text-sm text-gray-600 dark:text-gray-400 mb-4 space-y-2" id="deleteResultMessage">
-            <!-- Result details will be populated here -->
-        </div>
-        <div class="mt-5 sm:mt-6 flex justify-end">
-            <button type="button" id="deleteResultCloseBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-blue-600 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-gray-800 sm:text-sm">
-                Close & Refresh
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- Hidden Key Modal HTML (New) -->
-<div id="hiddenKeyModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3">Visibility Change</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" id="hiddenModalActionText"></p>
-        <div>
-            <label for="hiddenModalKeyInput" class="sr-only">Hidden Key</label>
-            <input type="password" name="hiddenModalKeyInput" id="hiddenModalKeyInput" autocomplete="off"
-                   class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Enter Hidden Key">
-        </div>
-        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="hiddenModalError" aria-live="assertive"></div>
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="hiddenModalCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 sm:text-sm">
-                Cancel
-            </button>
-            <button type="button" id="hiddenModalConfirmBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-indigo-600 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 sm:text-sm disabled:opacity-50">
-                Confirm
-            </button>
-        </div>
-    </div>
-</div>
-
-
-<!-- View Hidden Modal -->
-<div id="viewHiddenModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3" id="viewHiddenTitle">View Hidden Folders</h3>
-        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" id="viewHiddenText">Enter password to see all hidden folders.</p>
-        <div>
-            <label for="viewHiddenKeyInput" class="sr-only">Password</label>
-            <input type="password" id="viewHiddenKeyInput" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" placeholder="Password">
-        </div>
-        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="viewHiddenError"></div>
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="viewHiddenCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none sm:text-sm">Cancel</button>
-            <button type="button" id="viewHiddenConfirmBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-indigo-600 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none sm:text-sm">Confirm</button>
-        </div>
-    </div>
-</div>
-
-<!-- Create Folder Modal -->
-<div id="createFolderModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3">Create New Folder</h3>
-        <div class="space-y-4">
-            <div>
-                <label for="newFolderName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Folder Name</label>
-                <input type="text" id="newFolderName" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-green-500 focus:border-green-500 sm:text-sm">
-            </div>
-            <div>
-                <label for="createFolderKey" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
-                <input type="password" id="createFolderKey" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-green-500 focus:border-green-500 sm:text-sm" placeholder="Upload/Admin Key">
-            </div>
-            <div>
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" id="enableFolderProtection" class="h-4 w-4 rounded accent-green-600">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Password protect this folder</span>
-                </label>
-            </div>
-            <div id="folderProtectionPasswordContainer" class="hidden">
-                <label for="folderProtectionPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Protection Password</label>
-                <input type="password" id="folderProtectionPassword" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-green-500 focus:border-green-500 sm:text-sm" placeholder="Password for accessing this folder">
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This password will be required to access the folder.</p>
-            </div>
-        </div>
-        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="createFolderError"></div>
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="createFolderCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none sm:text-sm">Cancel</button>
-            <button type="button" id="createFolderConfirmBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-green-600 text-base font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none sm:text-sm">Create</button>
-        </div>
-    </div>
-</div>
-
-<!-- Upload File Modal -->
-<div id="uploadFileModal" class="modal-overlay">
-    <div class="modal-content">
-        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100 mb-3">Upload Files/Folder</h3>
-        <div class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload Mode</label>
-                <div class="flex space-x-4">
-                    <label class="flex items-center">
-                        <input type="radio" name="uploadMode" value="files" id="uploadModeFiles" checked class="mr-2 accent-blue-600">
-                        <span class="text-sm">Files</span>
-                    </label>
-                    <label class="flex items-center">
-                        <input type="radio" name="uploadMode" value="folder" id="uploadModeFolder" class="mr-2 accent-blue-600">
-                        <span class="text-sm">Folder</span>
-                    </label>
-                </div>
-            </div>
-            <div>
-                <label for="uploadFileInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300" id="uploadFileInputLabel">Select File(s)</label>
-                <input type="file" id="uploadFileInput" multiple class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-gray-700 dark:file:text-gray-300">
-            </div>
-            <div>
-                <label for="uploadTargetFolder" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Folder (Relative Path)</label>
-                <input type="text" id="uploadTargetFolder" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="e.g. docs/work (Leave as /{{ current_path }} for current)">
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Current: <span class="font-mono">/{{ current_path }}</span></p>
-            </div>
-            <div>
-                <label for="uploadFileKey" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Upload Password</label>
-                <input type="password" id="uploadFileKey" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Upload Key">
-            </div>
-            <div id="folderProtectionContainer" class="hidden">
-                <label class="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" id="enableProtection" class="h-4 w-4 rounded accent-blue-600">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Password protect uploaded folder</span>
-                </label>
-            </div>
-            <div id="protectionPasswordContainer" class="hidden">
-                <label for="protectionPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Protection Password</label>
-                <input type="password" id="protectionPassword" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500 sm:text-sm" placeholder="Password for accessing uploaded folder">
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">This password will be required to access the uploaded folder (outermost folder only).</p>
-            </div>
-        </div>
-        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="uploadFileError"></div>
-        <div class="mt-5 sm:mt-6 flex justify-end space-x-3">
-            <button type="button" id="uploadFileCancelBtn" class="inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none sm:text-sm">Cancel</button>
-            <button type="button" id="uploadFileConfirmBtn" class="inline-flex justify-center rounded-md border border-transparent px-4 py-2 bg-blue-600 text-base font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none sm:text-sm">Upload</button>
-        </div>
-    </div>
-</div>
-
+<!-- Scripts -->
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modals.js') }}"></script>
+<script src="{{ url_for('static', filename='js/file-browser.js') }}"></script>
 <script>
-    // --- Theme Toggle Logic ---
-    const themeToggle = document.getElementById('theme-toggle');
-    const themeIcon = document.getElementById('theme-icon');
-    const docElement = document.documentElement;
-
-    function setTheme(isDark) {
-        if (isDark) {
-            docElement.classList.add('dark');
-            themeIcon.textContent = '☀️'; // Sun icon for dark mode
-            localStorage.setItem('theme', 'dark');
-        } else {
-            docElement.classList.remove('dark');
-            themeIcon.textContent = '🌙'; // Moon icon for light mode
-            localStorage.setItem('theme', 'light');
-        }
-    }
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setTheme(savedTheme === 'dark' || (!savedTheme && prefersDark));
-    themeToggle.addEventListener('click', () => {
-        setTheme(!docElement.classList.contains('dark'));
+document.addEventListener('DOMContentLoaded', function() {
+    FileBrowser.init({
+        semanticSearchEnabled: {{ semantic_search_enabled | tojson }},
+        deleteKeyConfigured: {{ delete_key_configured | tojson }},
+        hiddenKeyConfigured: {{ hidden_key_configured | tojson }},
+        showHiddenFiles: {{ show_hidden_files | tojson }},
+        currentPath: {{ current_path | tojson }},
+        parentUrl: {{ parent_url | tojson }},
+        isCurrentPathHidden: {{ is_current_path_hidden | tojson }}
     });
-
-
-    // --- NEW: View Hidden Modal Logic ---
-    const viewHiddenBtn = document.getElementById('view-hidden-btn');
-    const viewHiddenModal = document.getElementById('viewHiddenModal');
-    const viewHiddenKeyInput = document.getElementById('viewHiddenKeyInput');
-    const viewHiddenError = document.getElementById('viewHiddenError');
-    const viewHiddenCancelBtn = document.getElementById('viewHiddenCancelBtn');
-    const viewHiddenConfirmBtn = document.getElementById('viewHiddenConfirmBtn');
-    const viewHiddenTitle = document.getElementById('viewHiddenTitle');
-    const viewHiddenText = document.getElementById('viewHiddenText');
-    const showHiddenFiles = {{ show_hidden_files | tojson }};
-
-    if (viewHiddenBtn) {
-        viewHiddenBtn.addEventListener('click', () => {
-            if (showHiddenFiles) {
-                // If already showing, we can toggle off without password? Or require it? 
-                // Let's require it for consistency, or just toggle off directly.
-                // It's safer to just toggle off directly or ask for confirmation.
-                // Let's just ask for confirmation with the same endpoint logic (server checks key) 
-                // OR we can allow "Unhide" without key if we assume session is secure.
-                // The endpoint requires a key. Let's ask for it.
-                viewHiddenTitle.textContent = "Hide Hidden Folders";
-                viewHiddenText.textContent = "Enter password to hide hidden folders again.";
-            } else {
-                viewHiddenTitle.textContent = "View Hidden Folders";
-                viewHiddenText.textContent = "Enter password to see all hidden folders.";
-            }
-            viewHiddenKeyInput.value = '';
-            viewHiddenError.textContent = '';
-            viewHiddenModal.classList.add('active');
-            viewHiddenKeyInput.focus();
-        });
-    }
-
-    if (viewHiddenCancelBtn) viewHiddenCancelBtn.addEventListener('click', () => viewHiddenModal.classList.remove('active'));
-
-    // Enter key support for view hidden modal
-    if (viewHiddenKeyInput) {
-        viewHiddenKeyInput.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !viewHiddenConfirmBtn.disabled) {
-                event.preventDefault();
-                viewHiddenConfirmBtn.click();
-            }
-        });
-    }
-
-    if (viewHiddenConfirmBtn) {
-        viewHiddenConfirmBtn.addEventListener('click', async () => {
-            const key = viewHiddenKeyInput.value;
-            if (!key) { viewHiddenError.textContent = 'Password required.'; return; }
-            
-            viewHiddenConfirmBtn.disabled = true;
-            viewHiddenConfirmBtn.textContent = 'Working...';
-            
-            try {
-                const response = await fetch('/api/toggle-view-hidden', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: key })
-                });
-                const result = await response.json();
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    viewHiddenError.textContent = result.error || 'Failed.';
-                }
-            } catch (e) {
-                viewHiddenError.textContent = 'Network error.';
-            } finally {
-                viewHiddenConfirmBtn.disabled = false;
-                viewHiddenConfirmBtn.textContent = 'Confirm';
-            }
-        });
-    }
-
-    // --- NEW: Create Folder Modal Logic ---
-    const createFolderBtn = document.getElementById('create-folder-btn');
-    const createFolderModal = document.getElementById('createFolderModal');
-    const newFolderName = document.getElementById('newFolderName');
-    const createFolderKey = document.getElementById('createFolderKey');
-    const createFolderError = document.getElementById('createFolderError');
-    const createFolderCancelBtn = document.getElementById('createFolderCancelBtn');
-    const createFolderConfirmBtn = document.getElementById('createFolderConfirmBtn');
-
-    const enableFolderProtection = document.getElementById('enableFolderProtection');
-    const folderProtectionPasswordContainer = document.getElementById('folderProtectionPasswordContainer');
-    const folderProtectionPassword = document.getElementById('folderProtectionPassword');
-
-    if (createFolderBtn) {
-        createFolderBtn.addEventListener('click', () => {
-            newFolderName.value = '';
-            createFolderKey.value = '';
-            createFolderError.textContent = '';
-            if (enableFolderProtection) enableFolderProtection.checked = false;
-            if (folderProtectionPassword) folderProtectionPassword.value = '';
-            if (folderProtectionPasswordContainer) folderProtectionPasswordContainer.classList.add('hidden');
-            createFolderModal.classList.add('active');
-            newFolderName.focus();
-        });
-    }
-
-    if (createFolderCancelBtn) createFolderCancelBtn.addEventListener('click', () => createFolderModal.classList.remove('active'));
-
-    // Toggle folder protection password field visibility
-    if (enableFolderProtection && folderProtectionPasswordContainer) {
-        enableFolderProtection.addEventListener('change', () => {
-            if (enableFolderProtection.checked) {
-                folderProtectionPasswordContainer.classList.remove('hidden');
-                folderProtectionPassword.focus();
-            } else {
-                folderProtectionPasswordContainer.classList.add('hidden');
-                folderProtectionPassword.value = '';
-            }
-        });
-    }
-
-    // Enter key support for create folder modal (trigger on password fields)
-    if (createFolderKey) {
-        createFolderKey.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !createFolderConfirmBtn.disabled) {
-                event.preventDefault();
-                createFolderConfirmBtn.click();
-            }
-        });
-    }
-    if (folderProtectionPassword) {
-        folderProtectionPassword.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !createFolderConfirmBtn.disabled) {
-                event.preventDefault();
-                createFolderConfirmBtn.click();
-            }
-        });
-    }
-
-    if (createFolderConfirmBtn) {
-        createFolderConfirmBtn.addEventListener('click', async () => {
-            const name = newFolderName.value.trim();
-            const key = createFolderKey.value;
-            if (!name || !key) { createFolderError.textContent = 'Name and Password required.'; return; }
-
-            const protectFolder = enableFolderProtection && enableFolderProtection.checked;
-            const protectionPwd = protectFolder ? folderProtectionPassword.value : null;
-            
-            if (protectFolder && !protectionPwd) {
-                createFolderError.textContent = 'Please enter a protection password.';
-                return;
-            }
-
-            createFolderConfirmBtn.disabled = true;
-            createFolderConfirmBtn.textContent = 'Creating...';
-            createFolderError.textContent = '';
-
-            try {
-                const response = await fetch('/api/create-folder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        parent_path: '{{ current_path }}',
-                        folder_name: name,
-                        key: key,
-                        protection_password: protectionPwd
-                    })
-                });
-                const result = await response.json();
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    createFolderError.textContent = result.error || 'Failed.';
-                }
-            } catch (e) {
-                createFolderError.textContent = 'Network error.';
-            } finally {
-                createFolderConfirmBtn.disabled = false;
-                createFolderConfirmBtn.textContent = 'Create';
-            }
-        });
-    }
-
-    // --- NEW: Upload File Modal Logic ---
-    const uploadFileBtn = document.getElementById('upload-file-btn');
-    const uploadFileModal = document.getElementById('uploadFileModal');
-    const uploadFileInput = document.getElementById('uploadFileInput');
-    const uploadFileInputLabel = document.getElementById('uploadFileInputLabel');
-    const uploadModeFiles = document.getElementById('uploadModeFiles');
-    const uploadModeFolder = document.getElementById('uploadModeFolder');
-    const uploadTargetFolder = document.getElementById('uploadTargetFolder');
-    const uploadFileKey = document.getElementById('uploadFileKey');
-    const enableProtection = document.getElementById('enableProtection');
-    const protectionPasswordContainer = document.getElementById('protectionPasswordContainer');
-    const protectionPassword = document.getElementById('protectionPassword');
-    const uploadFileError = document.getElementById('uploadFileError');
-    const uploadFileCancelBtn = document.getElementById('uploadFileCancelBtn');
-    const uploadFileConfirmBtn = document.getElementById('uploadFileConfirmBtn');
-
-    // Pass the current path from Flask to JS
-    const initialCurrentPath = '{{ current_path }}';
-
-    const folderProtectionContainer = document.getElementById('folderProtectionContainer');
-    
-    // Toggle protection password field visibility for uploads
-    if (enableProtection && protectionPasswordContainer) {
-        enableProtection.addEventListener('change', () => {
-            if (enableProtection.checked) {
-                protectionPasswordContainer.classList.remove('hidden');
-                protectionPassword.focus();
-            } else {
-                protectionPasswordContainer.classList.add('hidden');
-                protectionPassword.value = '';
-            }
-        });
-    }
-
-    // Toggle between file and folder upload mode
-    if (uploadModeFiles && uploadModeFolder && uploadFileInput) {
-        const toggleUploadMode = () => {
-            const isFolderMode = uploadModeFolder.checked;
-            if (isFolderMode) {
-                uploadFileInput.removeAttribute('multiple');
-                uploadFileInput.setAttribute('webkitdirectory', 'webkitdirectory');
-                uploadFileInput.setAttribute('directory', 'directory');
-                if (uploadFileInputLabel) uploadFileInputLabel.textContent = 'Select Folder';
-                // Show folder protection option only for folder mode
-                if (folderProtectionContainer) folderProtectionContainer.classList.remove('hidden');
-            } else {
-                uploadFileInput.removeAttribute('webkitdirectory');
-                uploadFileInput.removeAttribute('directory');
-                uploadFileInput.removeAttribute('multiple');
-                uploadFileInput.setAttribute('multiple', 'multiple');
-                if (uploadFileInputLabel) uploadFileInputLabel.textContent = 'Select File(s)';
-                // Hide folder protection option for file mode
-                if (folderProtectionContainer) folderProtectionContainer.classList.add('hidden');
-                if (enableProtection) enableProtection.checked = false;
-                if (protectionPasswordContainer) protectionPasswordContainer.classList.add('hidden');
-                if (protectionPassword) protectionPassword.value = '';
-            }
-        };
-        
-        uploadModeFiles.addEventListener('change', toggleUploadMode);
-        uploadModeFolder.addEventListener('change', toggleUploadMode);
-        // Initialize on page load
-        toggleUploadMode();
-    }
-
-    if (uploadFileBtn) {
-        uploadFileBtn.addEventListener('click', () => {
-            uploadFileInput.value = '';
-            uploadFileKey.value = '';
-            uploadFileError.textContent = '';
-            // Reset protection options
-            if (enableProtection) enableProtection.checked = false;
-            if (protectionPasswordContainer) protectionPasswordContainer.classList.add('hidden');
-            if (protectionPassword) protectionPassword.value = '';
-            // Reset to files mode
-            if (uploadModeFiles) uploadModeFiles.checked = true;
-            if (uploadModeFolder) uploadModeFolder.checked = false;
-            if (uploadFileInput) {
-                uploadFileInput.removeAttribute('webkitdirectory');
-                uploadFileInput.removeAttribute('directory');
-                uploadFileInput.setAttribute('multiple', 'multiple');
-            }
-            if (uploadFileInputLabel) uploadFileInputLabel.textContent = 'Select File(s)';
-            // Default the input to the current path
-            if (uploadTargetFolder) {
-                uploadTargetFolder.value = initialCurrentPath;
-            }
-            uploadFileModal.classList.add('active');
-        });
-    }
-
-    if (uploadFileCancelBtn) uploadFileCancelBtn.addEventListener('click', () => uploadFileModal.classList.remove('active'));
-
-    // Enter key support for upload modal (trigger on password fields)
-    if (uploadFileKey) {
-        uploadFileKey.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !uploadFileConfirmBtn.disabled) {
-                event.preventDefault();
-                uploadFileConfirmBtn.click();
-            }
-        });
-    }
-    if (protectionPassword) {
-        protectionPassword.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !uploadFileConfirmBtn.disabled) {
-                event.preventDefault();
-                uploadFileConfirmBtn.click();
-            }
-        });
-    }
-
-    if (uploadFileConfirmBtn) {
-        uploadFileConfirmBtn.addEventListener('click', async () => {
-            const files = uploadFileInput.files;
-            const key = uploadFileKey.value;
-            let targetPath = uploadTargetFolder ? uploadTargetFolder.value.trim() : initialCurrentPath;
-            const isFolderMode = uploadModeFolder && uploadModeFolder.checked;
-            
-            // Clean up leading/trailing slashes for consistency
-            targetPath = targetPath.replace(/^\/+|\/+$/g, '');
-
-            if (!files || files.length === 0) { 
-                uploadFileError.textContent = isFolderMode ? 'Please select a folder.' : 'Please select at least one file.'; 
-                return; 
-            }
-            if (!key) { uploadFileError.textContent = 'Password required.'; return; }
-
-            uploadFileConfirmBtn.disabled = true;
-            uploadFileConfirmBtn.textContent = 'Uploading...';
-            uploadFileError.textContent = '';
-
-            let successCount = 0;
-            let failCount = 0;
-            const errors = [];
-            let folderBasePath = null; // For folder uploads, track the base folder path
-
-            // Check if protection is enabled (only for folder uploads)
-            const protectFolder = isFolderMode && enableProtection && enableProtection.checked;
-            const protectionPwd = protectFolder ? protectionPassword.value : null;
-            
-            if (protectFolder && !protectionPwd) {
-                uploadFileError.textContent = 'Please enter a protection password.';
-                uploadFileConfirmBtn.disabled = false;
-                uploadFileConfirmBtn.textContent = 'Upload';
-                return;
-            }
-
-            // For folder uploads, extract the base folder name from the first file
-            if (isFolderMode && files.length > 0 && files[0].webkitRelativePath) {
-                const firstRelativePath = files[0].webkitRelativePath.replace(/\\/g, '/');
-                const pathParts = firstRelativePath.split('/');
-                if (pathParts.length > 0) {
-                    const folderName = pathParts[0];
-                    // This is the base folder that was selected
-                    folderBasePath = targetPath ? `${targetPath}/${folderName}` : folderName;
-                }
-            }
-
-            // Upload all files
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                let relPath;
-                
-                if (isFolderMode && file.webkitRelativePath) {
-                    // Folder upload: use webkitRelativePath to preserve folder structure
-                    // webkitRelativePath is like "folder_name/subfolder/file.txt"
-                    // We want to preserve this structure under the target path
-                    const relativePath = file.webkitRelativePath.replace(/\\/g, '/'); // Normalize to forward slashes
-                    // Combine with target path - this preserves the folder structure
-                    relPath = targetPath ? `${targetPath}/${relativePath}` : relativePath;
-                } else {
-                    // Regular file upload
-                    const filename = file.name;
-                    relPath = targetPath ? `${targetPath}/${filename}` : filename;
-                }
-
-                const uploadUrl = `/upload/${relPath}`;
-                
-                try {
-                    const response = await fetch(uploadUrl, {
-                        method: 'POST',
-                        headers: {
-                            'X-Upload-Key': key
-                        },
-                        body: file
-                    });
-                    
-                    let result;
-                    try { result = await response.json(); } catch(e) { result = { message: response.statusText }; }
-
-                    if (response.ok) {
-                        successCount++;
-                    } else {
-                        failCount++;
-                        errors.push({ file: file.name, error: result.message || `Status ${response.status}` });
-                    }
-                } catch (e) {
-                    failCount++;
-                    errors.push({ file: file.name, error: 'Network error' });
-                }
-            }
-
-            // If protection is enabled for folder uploads, protect only the outermost folder
-            if (protectFolder && successCount > 0 && isFolderMode && folderBasePath) {
-                try {
-                    const protectResponse = await fetch('/api/set-path-protection', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            path: folderBasePath,
-                            password: protectionPwd,
-                            key: key
-                        })
-                    });
-                    if (!protectResponse.ok) {
-                        const protectResult = await protectResponse.json().catch(() => ({}));
-                        console.warn(`Failed to protect folder ${folderBasePath}:`, protectResult.error || protectResponse.statusText);
-                        uploadFileError.textContent += ` Warning: Folder protection may have failed.`;
-                    }
-                } catch (e) {
-                    console.warn(`Error protecting folder ${folderBasePath}:`, e);
-                    uploadFileError.textContent += ` Warning: Folder protection error.`;
-                }
-            }
-
-            // Show results
-            if (failCount === 0) {
-                // All successful
-                const normInitial = initialCurrentPath.replace(/^\/+|\/+$/g, '');
-                if (targetPath === normInitial) {
-                    location.reload();
-                } else {
-                    uploadFileError.className = "mt-2 text-sm text-green-600 dark:text-green-400 h-5";
-                    uploadFileError.textContent = `Upload successful! ${successCount} file(s) uploaded.`;
-                    setTimeout(() => {
-                        uploadFileModal.classList.remove('active');
-                        uploadFileError.className = "mt-2 text-sm text-red-600 dark:text-red-400 h-5";
-                        uploadFileError.textContent = "";
-                        uploadFileConfirmBtn.disabled = false;
-                        uploadFileConfirmBtn.textContent = 'Upload';
-                    }, 2000);
-                    return;
-                }
-            } else {
-                // Some failures
-                uploadFileError.textContent = `Uploaded ${successCount}, failed ${failCount}. ${errors.length > 0 ? errors[0].error : ''}`;
-                uploadFileConfirmBtn.disabled = false;
-                uploadFileConfirmBtn.textContent = 'Upload';
-            }
-        });
-    }
-    
-    // Close modals on Escape or click outside (add to existing logic)
-    [viewHiddenModal, createFolderModal, uploadFileModal].forEach(m => {
-        if (m) {
-            m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('active'); });
-        }
-    });
-
-    // --- Search Form Logic ---
-    const searchForm = document.getElementById('search-form');
-    const searchInput = document.getElementById('search');
-    const smartSearchInput = document.getElementById('smart-search'); // Might be null
-    const recursiveCheckbox = document.getElementById('recursive');
-    const semantic_search_enabled = {{ semantic_search_enabled | tojson }}; // Get from Flask
-
-    searchForm.addEventListener('submit', function(event) {
-        event.preventDefault();
-        const submitter = event.submitter;
-        const isSmartSubmit = submitter?.name === 'submit_smart';
-        const isFilterSubmit = submitter?.name === 'submit_filter';
-        const filenameTerm = searchInput.value.trim();
-        const smartTerm = smartSearchInput ? smartSearchInput.value.trim() : '';
-        const isRecursive = recursiveCheckbox.checked;
-        let performSmartSearch = false;
-
-        if (semantic_search_enabled && smartTerm && (isSmartSubmit || !isFilterSubmit)) {
-             performSmartSearch = true;
-        } else if (semantic_search_enabled && isSmartSubmit && smartTerm) {
-             performSmartSearch = true;
-        } else if (semantic_search_enabled && isSmartSubmit && !smartTerm) {
-             console.log("Smart search submitted with empty query - ignoring.");
-             return;
-        }
-
-        const params = new URLSearchParams();
-        let navigationTarget = window.location.pathname;
-
-        if (performSmartSearch) {
-            console.log("Submitting Smart Search:", smartTerm);
-            params.set('smart_query', smartTerm);
-            // Optional: Reset path for global search results page
-            // navigationTarget = '/';
-        } else {
-            console.log("Submitting Filename Filter:", filenameTerm, "Recursive:", isRecursive);
-            if (filenameTerm) params.set('search', filenameTerm);
-            params.set('recursive', isRecursive ? 'true' : 'false');
-        }
-
-        // Clear search if both terms are empty and no specific button pressed
-        if (!filenameTerm && !smartTerm && !isSmartSubmit && !isFilterSubmit) {
-            console.log("Clearing search terms.");
-            window.location.href = navigationTarget;
-            return;
-        }
-
-        const paramString = params.toString();
-        // Construct final URL ensuring base path + params
-        const finalUrl = navigationTarget.replace(/\/$/, '') + '/' + (paramString ? '?' + paramString : '');
-
-        console.log("Navigating to:", finalUrl);
-        window.location.href = finalUrl;
-    });
-
-
-    // --- Modal Handling and Protected Folder Logic ---
-    const fileList = document.getElementById('file-list');
-    const modal = document.getElementById('accessKeyModal');
-    const modalTitle = document.getElementById('modalTitle');
-    const modalPathLabel = document.getElementById('modalPathLabel');
-    const modalKeyInput = document.getElementById('modalKeyInput');
-    const modalError = document.getElementById('modalError');
-    const modalCancelBtn = document.getElementById('modalCancelBtn');
-    const modalSubmitBtn = document.getElementById('modalSubmitBtn');
-    let targetPathForModal = null; // Store the relative path for validation
-
-    function showModal(targetPath, folderName) {
-        // Store the raw relative path (like '/private%20docs') for validation endpoint
-        targetPathForModal = targetPath;
-        modalTitle.textContent = `Enter Access Key`;
-        // Decode for display label only
-        try {
-             modalPathLabel.textContent = `For folder: ${decodeURIComponent(folderName)}`;
-        } catch (e) {
-             modalPathLabel.textContent = `For folder: ${folderName}`; // Fallback
-        }
-        modalKeyInput.value = '';
-        modalError.textContent = '';
-        modalSubmitBtn.disabled = false;
-        modalSubmitBtn.innerHTML = 'Submit'; // Reset button text
-        modal.classList.add('active');
-        modalKeyInput.focus();
-    }
-
-    function hideModal() {
-        modal.classList.remove('active');
-        targetPathForModal = null;
-    }
-
-    // Event listener for clicking protected folder links
-    fileList.addEventListener('click', function(event) {
-        const link = event.target.closest('a.protected-folder-link');
-        const listItem = link ? link.closest('li[data-protected="true"]') : null;
-
-        if (link && listItem) {
-            event.preventDefault();
-            // Get the href, which should be the URL-encoded relative path
-            const targetHref = link.getAttribute('href');
-            // Get display name for the modal prompt
-            const folderName = link.querySelector('.folder-name')?.textContent.trim() || targetHref;
-            showModal(targetHref, folderName); // Pass the href (encoded path)
-        }
-    });
-
-    // Modal Cancel Button
-    modalCancelBtn.addEventListener('click', hideModal);
-    // Clicking overlay to close modal
-    modal.addEventListener('click', function(event) { if (event.target === modal) hideModal(); });
-    // Escape key to close modal
-     document.addEventListener('keydown', function(event) { if (event.key === 'Escape' && modal.classList.contains('active')) hideModal(); });
-
-    // Modal Submit Button - Validate Key via Fetch
-    modalSubmitBtn.addEventListener('click', async function() {
-        const enteredKey = modalKeyInput.value;
-        const targetPath = targetPathForModal; // The URL-encoded path from href
-
-        if (!targetPath) return;
-
-        modalSubmitBtn.disabled = true;
-        modalError.textContent = '';
-        modalSubmitBtn.innerHTML = `<svg class="animate-spin inline mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Validating...`;
-
-        try {
-            const response = await fetch('/validate-key', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify({ path: targetPath, key: enteredKey }) // Send encoded path and key
-            });
-
-            const result = await response.json();
-
-            if (response.ok && result.status === 'success') {
-                console.log("Key validated. Navigating to:", targetPath);
-                hideModal();
-                window.location.href = targetPath; // Navigate to the original target path
-            } else {
-                console.error("Key validation failed:", result.message);
-                modalError.textContent = result.message || 'Invalid key or server error.';
-                modalKeyInput.focus();
-                modalKeyInput.select();
-            }
-        } catch (error) {
-            console.error("Fetch error during key validation:", error);
-            modalError.textContent = 'Network error. Could not validate key.';
-        } finally {
-            modalSubmitBtn.disabled = false;
-            modalSubmitBtn.innerHTML = 'Submit';
-        }
-    });
-
-    // Allow submitting modal with Enter key
-    modalKeyInput.addEventListener('keypress', function(event) {
-         if (event.key === 'Enter' && !modalSubmitBtn.disabled) {
-            event.preventDefault(); // Prevent potential form submission if modal is inside one
-             modalSubmitBtn.click();
-         }
-     });
-
-    // --- NEW: Delete Mode Logic ---
-    const deleteModeBtn = document.getElementById('delete-mode-btn');
-    const deleteKeyModal = document.getElementById('deleteKeyModal');
-    const deleteModalKeyInput = document.getElementById('deleteModalKeyInput');
-    const deleteModalError = document.getElementById('deleteModalError');
-    const deleteModalCancelBtn = document.getElementById('deleteModalCancelBtn');
-    const deleteModalSubmitBtn = document.getElementById('deleteModalSubmitBtn');
-    const deleteControls = document.getElementById('delete-controls');
-    const cancelDeleteModeBtn = document.getElementById('cancel-delete-mode-btn');
-    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
-    const fileListCheckboxes = document.querySelectorAll('.delete-checkbox');
-    const bodyElement = document.body;
-
-    // New Modal Elements References
-    const confirmDeleteModal = document.getElementById('confirmDeleteModal');
-    const confirmDeleteText = document.getElementById('confirmDeleteText');
-    const confirmDeleteCancelBtn = document.getElementById('confirmDeleteCancelBtn');
-    const confirmDeleteConfirmBtn = document.getElementById('confirmDeleteConfirmBtn');
-    const deleteResultModal = document.getElementById('deleteResultModal');
-    const deleteResultTitle = document.getElementById('deleteResultTitle');
-    const deleteResultMessage = document.getElementById('deleteResultMessage');
-    const deleteResultCloseBtn = document.getElementById('deleteResultCloseBtn');
-
-    let enteredDeleteKey = null;
-    let itemsToDeleteGlobally = []; // Store items for confirmation modal
-    const deleteKeyConfigured = {{ delete_key_configured | tojson }};
-
-    // --- Delete Mode UI Toggles ---
-    function enterDeleteMode(validKey) {
-        enteredDeleteKey = validKey; // Store the validated key
-        bodyElement.classList.add('delete-mode');
-        hideDeleteKeyModal();
-        // Disable delete button if no items checked initially
-        checkAnyCheckboxSelected();
-    }
-
-    function exitDeleteMode() {
-        enteredDeleteKey = null; // Clear stored key
-        bodyElement.classList.remove('delete-mode');
-        // Uncheck all checkboxes
-        fileListCheckboxes.forEach(cb => { cb.checked = false; });
-    }
-
-    function showDeleteKeyModal() { deleteKeyModal?.classList.add('active'); deleteModalKeyInput?.focus(); }
-    function hideDeleteKeyModal() { deleteKeyModal?.classList.remove('active'); deleteModalError.textContent = ''; deleteModalKeyInput.value = ''; }
-
-    // Simplified client-side check (RELY ON SERVER FOR REAL SECURITY)
-    // A better way: fetch('/api/check-delete-key', {method: 'POST', body: JSON.stringify({key: enteredKey})})
-    function validateDeleteKeyLocally(enteredKey) {
-         // This is just a placeholder check for the UI flow.
-         // The actual security check happens on the server during the delete API call.
-         // We only check if *a* key was configured server-side and *a* key was entered client-side.
-         return deleteKeyConfigured && enteredKey.length > 0;
-    }
-
-    // Check if any delete checkbox is selected to enable/disable the delete button
-    function checkAnyCheckboxSelected() {
-        const anyChecked = Array.from(fileListCheckboxes).some(cb => cb.checked);
-        deleteSelectedBtn.disabled = !anyChecked;
-    }
-
-    // --- Delete Event Listeners ---
-    if (deleteModeBtn) {
-        deleteModeBtn.addEventListener('click', showDeleteKeyModal);
-    }
-    if (deleteModalCancelBtn) {
-         deleteModalCancelBtn.addEventListener('click', hideDeleteKeyModal);
-    }
-    if (deleteKeyModal) {
-        // Close modal on overlay click
-        deleteKeyModal.addEventListener('click', (event) => { if (event.target === deleteKeyModal) hideDeleteKeyModal(); });
-        // Close modal on Escape key
-        document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && deleteKeyModal.classList.contains('active')) hideDeleteKeyModal(); });
-    }
-
-    if (deleteModalSubmitBtn) {
-        deleteModalSubmitBtn.addEventListener('click', () => {
-            const keyAttempt = deleteModalKeyInput.value;
-            deleteModalError.textContent = '';
-            // Note: Using a simplified local check here for UI flow demonstration.
-            // Real validation MUST happen server-side.
-            // You might replace this with a fetch to `/api/check-delete-key` in a real app.
-            if (validateDeleteKeyLocally(keyAttempt)) {
-                enterDeleteMode(keyAttempt); // Pass the entered key
-            } else {
-                 deleteModalError.textContent = 'Invalid key entered or feature not configured.';
-                 deleteModalKeyInput.focus();
-                 deleteModalKeyInput.select();
-            }
-        });
-        // Allow submit with Enter key
-        deleteModalKeyInput?.addEventListener('keypress', (event) => {
-             if (event.key === 'Enter') { event.preventDefault(); deleteModalSubmitBtn.click(); }
-        });
-    }
-
-    if (cancelDeleteModeBtn) {
-        cancelDeleteModeBtn.addEventListener('click', exitDeleteMode);
-    }
-
-    // Add listeners to checkboxes to enable/disable delete button
-    fileListCheckboxes.forEach(cb => {
-         cb.addEventListener('change', checkAnyCheckboxSelected);
-    });
-
-    // Modified: deleteSelectedBtn only shows confirmation modal
-    if (deleteSelectedBtn) {
-        deleteSelectedBtn.addEventListener('click', () => {
-            itemsToDeleteGlobally = Array.from(fileListCheckboxes)
-                                     .filter(cb => cb.checked)
-                                     .map(cb => cb.value);
-
-            if (itemsToDeleteGlobally.length === 0) {
-                // Use result modal for this minor feedback instead of alert
-                deleteResultTitle.textContent = 'Selection Required';
-                deleteResultMessage.textContent = 'Please select at least one item to delete.';
-                showDeleteResultModal();
-                // Make the close button just close, not refresh
-                deleteResultCloseBtn.onclick = () => hideDeleteResultModal();
-                return;
-            }
-            if (!enteredDeleteKey) {
-                 showDeleteResultModal();
-                 deleteResultTitle.textContent = 'Error';
-                 deleteResultMessage.textContent = 'Delete key not verified. Please re-enter delete mode.';
-                 deleteResultCloseBtn.onclick = () => { hideDeleteResultModal(); exitDeleteMode(); };
-                 return;
-            }
-
-            const itemCount = itemsToDeleteGlobally.length;
-            confirmDeleteText.textContent = `Are you sure you want to delete ${itemCount} selected item(s)? This cannot be undone.`;
-            showConfirmDeleteModal();
-        });
-    }
-
-    // New: Listener for the CONFIRM button in the confirmation modal
-     if (confirmDeleteConfirmBtn) {
-         confirmDeleteConfirmBtn.addEventListener('click', () => {
-             performDelete(itemsToDeleteGlobally);
-         });
-     }
-
-     // New: Listener for the CANCEL button in the confirmation modal
-     if (confirmDeleteCancelBtn) {
-         confirmDeleteCancelBtn.addEventListener('click', hideConfirmDeleteModal);
-     }
-
-    // New: Listener for the CLOSE button in the result modal
-    if (deleteResultCloseBtn) {
-        deleteResultCloseBtn.addEventListener('click', () => {
-            // Default behavior is refresh, modified above for selection errors
-             hideDeleteResultModal();
-             location.reload();
-        });
-    }
-
-    // New: Listeners to close modals on overlay click / Escape key
-    [confirmDeleteModal, deleteResultModal].forEach(modalElement => {
-        if (modalElement) {
-            modalElement.addEventListener('click', (event) => {
-                if (event.target === modalElement) {
-                    if (modalElement.id === 'confirmDeleteModal') hideConfirmDeleteModal();
-                    else if (modalElement.id === 'deleteResultModal') {
-                         hideDeleteResultModal();
-                         // Only refresh if it was a real result, not just feedback
-                         if (deleteResultTitle.textContent !== 'Selection Required') {
-                            location.reload();
-                         }
-                    }
-                }
-            });
-        }
-    });
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
-             if (confirmDeleteModal?.classList.contains('active')) hideConfirmDeleteModal();
-             if (deleteResultModal?.classList.contains('active')) {
-                  hideDeleteResultModal();
-                  if (deleteResultTitle.textContent !== 'Selection Required') {
-                      location.reload();
-                  }
-             }
-        }
-    });
-
-    // --- Function to perform the actual API call --- 
-    async function performDelete(itemsToDelete) {
-        if (!enteredDeleteKey) {
-            // This should ideally not happen if UI flow is correct, but good safeguard
-            exitDeleteMode();
-            showDeleteResultModal(); // Use result modal for this error too
-            deleteResultTitle.textContent = 'Error';
-            deleteResultMessage.textContent = 'Delete key validation lost. Please try again.';
-            return;
-        }
-
-        // Disable confirm button while processing
-        confirmDeleteConfirmBtn.disabled = true;
-        confirmDeleteConfirmBtn.textContent = 'Deleting...';
-
-        try {
-            const response = await fetch('/api/delete-items', {
-                method: 'POST',
-                headers: {
-                     'Content-Type': 'application/json',
-                     'Accept': 'application/json',
-                     'X-Delete-Key': enteredDeleteKey // Send the verified key
-                },
-                body: JSON.stringify({ items_to_delete: itemsToDelete })
-            });
-
-            const result = await response.json();
-
-            // Prepare result message content (HTML for better formatting)
-            let resultHTML = `<p>Success: <strong>${result.success_count || 0}</strong>, Failed: <strong>${result.fail_count || 0}</strong></p>`;
-            if (result.errors && result.errors.length > 0) {
-                 resultHTML += '<p class="mt-2 font-medium">Errors:</p><ul class="list-disc list-inside text-xs">';
-                 result.errors.forEach(err => {
-                     // Basic escaping for safety, though paths are generally controlled
-                     const safePath = err.path.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                     const safeError = err.error.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                     resultHTML += `<li><code>${safePath}</code>: ${safeError}</li>`;
-                 });
-                 resultHTML += '</ul>';
-            }
-
-            // Show result modal
-            deleteResultTitle.textContent = (result.fail_count > 0) ? 'Deletion Complete (with errors)' : 'Deletion Successful';
-            deleteResultMessage.innerHTML = resultHTML;
-            showDeleteResultModal();
-
-            // If the API call itself failed (not just partial deletion errors)
-            if (!response.ok && response.status !== 207) {
-                 throw new Error(result.error || `Deletion request failed with status ${response.status}`);
-            }
-
-        } catch (error) {
-            console.error("Deletion error:", error);
-            // Show error in result modal
-            deleteResultTitle.textContent = 'Deletion Error';
-            deleteResultMessage.textContent = `An error occurred during deletion: ${error.message}`;
-            showDeleteResultModal();
-            exitDeleteMode(); // Exit delete mode on major error
-        } finally {
-            // Re-enable confirm button and restore text
-            confirmDeleteConfirmBtn.disabled = false;
-            confirmDeleteConfirmBtn.textContent = 'Confirm Delete';
-            hideConfirmDeleteModal(); // Hide confirmation modal after processing
-        }
-    }
-
-    // --- NEW: Delete Mode UI Toggles ---
-    function showConfirmDeleteModal() { confirmDeleteModal?.classList.add('active'); }
-    function hideConfirmDeleteModal() { confirmDeleteModal?.classList.remove('active'); }
-    function showDeleteResultModal() { deleteResultModal?.classList.add('active'); }
-    function hideDeleteResultModal() { deleteResultModal?.classList.remove('active'); }
-
-    // --- NEW: Hidden Folder Logic ---
-    const hiddenToggle = document.getElementById('hidden-toggle');
-    const hiddenKeyConfigured = {{ hidden_key_configured | tojson }};
-    const currentPath = {{ current_path | tojson }};
-    const isCurrentlyHidden = {{ is_current_path_hidden | tojson }};
-
-    if (hiddenToggle && hiddenKeyConfigured) {
-        hiddenToggle.addEventListener('change', (event) => {
-            const isChecked = event.target.checked;
-            // The action text depends on the new state
-            const actionText = isChecked
-                ? `This will hide the folder '/${currentPath}' from all listings. It will only be accessible via direct link.`
-                : `This will make the folder '/${currentPath}' visible in all listings again.`;
-            
-            hiddenModalActionText.textContent = actionText + " Please enter the key to confirm.";
-            hiddenModalKeyInput.value = '';
-            hiddenModalError.textContent = '';
-            hiddenModalConfirmBtn.disabled = false;
-            hiddenModalConfirmBtn.textContent = 'Confirm';
-            hiddenKeyModal.classList.add('active');
-            hiddenModalKeyInput.focus();
-        });
-    }
-
-    function hideHiddenKeyModal() {
-        hiddenKeyModal.classList.remove('active');
-        // IMPORTANT: Revert checkbox state if the action was cancelled
-        if (hiddenToggle) {
-            hiddenToggle.checked = isCurrentlyHidden;
-        }
-    }
-
-    if (hiddenModalCancelBtn) {
-        hiddenModalCancelBtn.addEventListener('click', hideHiddenKeyModal);
-    }
-    if (hiddenKeyModal) {
-        hiddenKeyModal.addEventListener('click', (event) => { if (event.target === hiddenKeyModal) hideHiddenKeyModal(); });
-    }
-     document.addEventListener('keydown', (event) => { 
-        if (event.key === 'Escape') {
-            if (modal.classList.contains('active')) hideModal();
-            if (deleteKeyModal?.classList.contains('active')) hideDeleteKeyModal();
-            if (hiddenKeyModal?.classList.contains('active')) hideHiddenKeyModal();
-        }
-    });
-
-    if (hiddenModalConfirmBtn) {
-        hiddenModalConfirmBtn.addEventListener('click', async () => {
-            const key = hiddenModalKeyInput.value;
-            const shouldHide = hiddenToggle.checked;
-
-            if (!key) {
-                hiddenModalError.textContent = 'Key cannot be empty.';
-                return;
-            }
-
-            hiddenModalError.textContent = '';
-            hiddenModalConfirmBtn.disabled = true;
-            hiddenModalConfirmBtn.textContent = 'Working...';
-
-            try {
-                const response = await fetch('/api/toggle-hidden', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ path: currentPath, key: key, hide: shouldHide })
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(result.error || `Request failed with status ${response.status}`);
-                }
-                
-                // Success! The folder is now hidden/unhidden.
-                // Redirect to the parent directory to see the change.
-                const parentUrl = '{{ parent_url }}' || '/';
-                console.log(`Visibility toggled. Redirecting to parent: ${parentUrl}`);
-                window.location.href = parentUrl;
-
-            } catch(error) {
-                console.error('Error toggling hidden state:', error);
-                hiddenModalError.textContent = error.message;
-                hiddenModalConfirmBtn.disabled = false;
-                hiddenModalConfirmBtn.textContent = 'Confirm';
-            }
-        });
-    }
-     if (hiddenModalKeyInput) {
-        hiddenModalKeyInput.addEventListener('keypress', function(event) {
-            if (event.key === 'Enter' && !hiddenModalConfirmBtn.disabled) {
-                event.preventDefault();
-                hiddenModalConfirmBtn.click();
-            }
-        });
-    }
-
+});
 </script>
 </body>
 </html>

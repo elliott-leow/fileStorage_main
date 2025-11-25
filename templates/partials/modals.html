@@ -1,0 +1,170 @@
+<!-- Access Key Modal -->
+<div id="accessKeyModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Enter Access Key</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" id="modalPathLabel"></p>
+        <input type="password" id="modalKeyInput" autocomplete="current-password" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500" placeholder="API Key">
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="modalError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="modalCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="modalSubmitBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Submit</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Key Modal -->
+<div id="deleteKeyModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Enter Delete Key</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Enter the configured key to enable file deletion.</p>
+        <input type="password" id="deleteModalKeyInput" autocomplete="current-password" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500" placeholder="Delete Key">
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="deleteModalError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="deleteModalCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="deleteModalSubmitBtn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Enable Deletion</button>
+        </div>
+    </div>
+</div>
+
+<!-- Confirm Delete Modal -->
+<div id="confirmDeleteModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-yellow-700 dark:text-yellow-300 mb-3">Confirm Deletion</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4" id="confirmDeleteText">Are you sure?</p>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="confirmDeleteCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="confirmDeleteConfirmBtn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">Confirm Delete</button>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Result Modal -->
+<div id="deleteResultModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3" id="deleteResultTitle">Deletion Result</h3>
+        <div class="text-sm text-gray-600 dark:text-gray-400 mb-4" id="deleteResultMessage"></div>
+        <div class="mt-5 flex justify-end">
+            <button type="button" id="deleteResultCloseBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Close & Refresh</button>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden Key Modal -->
+<div id="hiddenKeyModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Visibility Change</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" id="hiddenModalActionText"></p>
+        <input type="password" id="hiddenModalKeyInput" autocomplete="off" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Enter Hidden Key">
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="hiddenModalError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="hiddenModalCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="hiddenModalConfirmBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- View Hidden Modal -->
+<div id="viewHiddenModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3" id="viewHiddenTitle">View Hidden Folders</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4" id="viewHiddenText">Enter password to see all hidden folders.</p>
+        <input type="password" id="viewHiddenKeyInput" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Password">
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="viewHiddenError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="viewHiddenCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="viewHiddenConfirmBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create Folder Modal -->
+<div id="createFolderModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Create New Folder</h3>
+        <div class="space-y-4">
+            <div>
+                <label for="newFolderName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Folder Name</label>
+                <input type="text" id="newFolderName" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-green-500 focus:border-green-500">
+            </div>
+            <div>
+                <label for="createFolderKey" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
+                <input type="password" id="createFolderKey" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-green-500 focus:border-green-500" placeholder="Upload/Admin Key">
+            </div>
+            <div>
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" id="enableFolderProtection" class="h-4 w-4 rounded accent-green-600">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Password protect this folder</span>
+                </label>
+            </div>
+            <div id="folderProtectionPasswordContainer" class="hidden">
+                <label for="folderProtectionPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Protection Password</label>
+                <input type="password" id="folderProtectionPassword" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-green-500 focus:border-green-500" placeholder="Password for accessing this folder">
+            </div>
+        </div>
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="createFolderError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="createFolderCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="createFolderConfirmBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Upload File Modal -->
+<div id="uploadFileModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">Upload Files/Folder</h3>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Upload Mode</label>
+                <div class="flex space-x-4">
+                    <label class="flex items-center"><input type="radio" name="uploadMode" value="files" id="uploadModeFiles" checked class="mr-2 accent-blue-600"><span class="text-sm">Files</span></label>
+                    <label class="flex items-center"><input type="radio" name="uploadMode" value="folder" id="uploadModeFolder" class="mr-2 accent-blue-600"><span class="text-sm">Folder</span></label>
+                </div>
+            </div>
+            <div>
+                <label for="uploadFileInput" class="block text-sm font-medium text-gray-700 dark:text-gray-300" id="uploadFileInputLabel">Select File(s)</label>
+                <input type="file" id="uploadFileInput" multiple class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-gray-700 dark:file:text-gray-300">
+            </div>
+            <div>
+                <label for="uploadTargetFolder" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Folder</label>
+                <input type="text" id="uploadTargetFolder" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500" placeholder="Leave for current folder">
+            </div>
+            <div>
+                <label for="uploadFileKey" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Upload Password</label>
+                <input type="password" id="uploadFileKey" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500" placeholder="Upload Key">
+            </div>
+            <div id="folderProtectionContainer" class="hidden">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="checkbox" id="enableProtection" class="h-4 w-4 rounded accent-blue-600">
+                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Password protect uploaded folder</span>
+                </label>
+            </div>
+            <div id="protectionPasswordContainer" class="hidden">
+                <label for="protectionPassword" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Protection Password</label>
+                <input type="password" id="protectionPassword" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-blue-500 focus:border-blue-500" placeholder="Password for accessing folder">
+            </div>
+            <!-- Upload Progress -->
+            <div id="uploadProgressContainer" class="hidden">
+                <div class="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    <span id="uploadProgressLabel">Uploading...</span>
+                    <span id="uploadProgressPercent">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                    <div id="uploadProgressBar" class="bg-blue-600 h-full rounded-full transition-all duration-150" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <span id="uploadProgressBytes">0 MB / 0 MB</span>
+                    <span id="uploadProgressSpeed"></span>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1" id="uploadProgressFile">File 0 of 0</div>
+            </div>
+        </div>
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="uploadFileError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="uploadFileCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="uploadFileConfirmBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Upload</button>
+        </div>
+    </div>
+</div>
+
+

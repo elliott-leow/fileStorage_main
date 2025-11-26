@@ -1,0 +1,27 @@
+#file server configuration
+#copy this file to .env and modify as needed
+
+#root directory for serving files (default: ./public)
+PUBLIC_DIR=./public
+
+#flask secret key for session security
+FLASK_SECRET_KEY=your-secure-secret-key-here
+
+#server settings
+HOST=0.0.0.0
+PORT=8000
+DEBUG=true
+
+#api keys for file operations
+KEY=your-upload-api-key
+DELETE_KEY=your-delete-api-key
+HIDDEN_KEY=your-hidden-files-key
+
+#configuration file paths
+FOLDER_KEYS_CONFIG=folder_keys.json
+FOLDER_VISIBILITY_CONFIG=folder_visibility.json
+
+#semantic search settings
+SEMANTIC_MODEL=all-MiniLM-L6-v2
+CACHE_DIR=~/.cache/filebrowser_cache
+

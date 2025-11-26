@@ -44,7 +44,7 @@ if app.secret_key == "dev-insecure-fallback-key":
     print("!!! Set the FLASK_SECRET_KEY environment variable for secure sessions. !!!\n")
 
 
-PUBLIC_DIR = os.path.expanduser("./public")
+PUBLIC_DIR = os.path.expanduser(os.getenv("PUBLIC_DIR", "./public"))
 # Use global key for general uploads and potentially admin actions like rebuild
 UPLOAD_API_KEY = os.getenv("KEY")
 # Key required for deleting files/folders

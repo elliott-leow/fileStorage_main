@@ -76,12 +76,10 @@ venv\Scripts\activate     # Windows
 pip install -r requirements.txt
 ```
 
-4. Create a `.env` file:
-```env
-FLASK_SECRET_KEY=your-secret-key-here
-KEY=your-upload-api-key
-DELETE_KEY=your-delete-key
-HIDDEN_KEY=your-hidden-key
+4. Create a `.env` file from the example config:
+```bash
+cp config.example .env
+# Edit .env to customize settings (especially PUBLIC_DIR for root file path)
 ```
 
 5. Run the application:

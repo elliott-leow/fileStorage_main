@@ -754,6 +754,26 @@ const FileBrowser = {
     },
     
     /**
+     * Validate upload key before starting upload
+     */
+    async validateUploadKey(key, targetPath) {
+        try {
+            const response = await fetch('/api/validate-upload-key', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ key, path: targetPath })
+            });
+            const result = await response.json();
+            if (response.ok && result.status === 'success') {
+                return { valid: true };
+            }
+            return { valid: false, error: result.error || 'Invalid key.' };
+        } catch (e) {
+            return { valid: false, error: 'Network error validating key.' };
+        }
+    },
+    
+    /**
      * Perform file upload
      */
     async performUpload() {
@@ -792,16 +812,30 @@ const FileBrowser = {
             return;
         }
         
-        // Disable buttons during upload
+        //disable buttons during validation
         if (uploadFileConfirmBtn) {
             uploadFileConfirmBtn.disabled = true;
-            uploadFileConfirmBtn.textContent = 'Uploading...';
+            uploadFileConfirmBtn.textContent = 'Validating...';
         }
-        if (uploadFileCancelBtn) uploadFileCancelBtn.disabled = true;
         if (uploadFileError) {
             uploadFileError.textContent = '';
             uploadFileError.className = 'mt-2 text-sm text-red-600 dark:text-red-400 h-5';
         }
+        
+        //validate key before starting upload
+        const validation = await this.validateUploadKey(key, targetPath);
+        if (!validation.valid) {
+            if (uploadFileError) uploadFileError.textContent = validation.error;
+            if (uploadFileConfirmBtn) {
+                uploadFileConfirmBtn.disabled = false;
+                uploadFileConfirmBtn.textContent = 'Upload';
+            }
+            return;
+        }
+        
+        //key is valid, proceed with upload
+        if (uploadFileConfirmBtn) uploadFileConfirmBtn.textContent = 'Uploading...';
+        if (uploadFileCancelBtn) uploadFileCancelBtn.disabled = true;
         
         // Calculate total size for progress
         let grandTotal = 0;

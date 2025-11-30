@@ -225,3 +225,38 @@ def delete_items():
     return jsonify(result), status_code
 
 
+@api_bp.route("/validate-upload-key", methods=["POST"])
+def validate_upload_key():
+    """Validate upload key before starting upload."""
+    config = current_app.config_obj
+    auth_service = current_app.auth_service
+    
+    data = request.get_json()
+    if not data:
+        return jsonify(error="Invalid request."), 400
+    
+    provided_key = data.get("key", "")
+    target_path = normalize_path(data.get("path", ""))
+    
+    if not provided_key:
+        return jsonify(error="Upload key required."), 400
+    
+    #check folder-specific key first
+    required_key = auth_service.get_required_key_for_path(target_path)
+    
+    if required_key:
+        #folder has specific key requirement
+        if provided_key == required_key:
+            return jsonify(status="success", message="Key valid.")
+        else:
+            return jsonify(error="Invalid key for this folder."), 401
+    else:
+        #use global upload key
+        if not config.UPLOAD_API_KEY:
+            return jsonify(error="Server upload key not configured."), 501
+        if provided_key == config.UPLOAD_API_KEY:
+            return jsonify(status="success", message="Key valid.")
+        else:
+            return jsonify(error="Invalid upload key."), 401
+
+

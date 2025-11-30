@@ -24,12 +24,15 @@ def create_app(config_name: str = None) -> Flask:
     """
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     
-    # Load configuration
+    #load configuration
     config = get_config(config_name)
     app.config.from_object(config)
     app.secret_key = config.SECRET_KEY
     
-    # Store config object for easy access
+    #set max upload size (important for large files)
+    app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
+    
+    #store config object for easy access
     app.config_obj = config
     
     # Warn about insecure secret key
@@ -150,6 +153,7 @@ def _log_startup_info(app: Flask, config: Config) -> None:
     
     print(f"Delete Key Configured: {config.DELETE_KEY_CONFIGURED}")
     print(f"Hidden Key Configured: {config.HIDDEN_KEY_CONFIGURED}")
+    print(f"Max Upload Size: {config.MAX_UPLOAD_SIZE_GB} GB")
     
     if not config.is_secret_key_secure():
         print("!!! Flask Session Secret Key is INSECURE !!!")

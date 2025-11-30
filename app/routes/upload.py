@@ -13,14 +13,14 @@ upload_bp = Blueprint("upload", __name__)
 
 @upload_bp.route("/upload/<path:filename>", methods=["POST"])
 def upload_file(filename):
-    """Handle file uploads via POST request."""
+    """Handle file uploads via POST request with streaming support."""
     config = current_app.config_obj
     file_service = current_app.file_service
     auth_service = current_app.auth_service
     
     provided_upload_key = request.headers.get("X-Upload-Key")
     
-    # Sanitize path
+    #sanitize path
     safe_parts = []
     try:
         path_parts = filename.strip("/").split("/")
@@ -44,7 +44,7 @@ def upload_file(filename):
     if not file_service.is_safe_path(destination_abs):
         abort(403)
     
-    # Authentication check
+    #authentication check
     target_dir_rel = os.path.dirname(safe_relative_path)
     required_key = auth_service.get_required_key_for_path(target_dir_rel)
     
@@ -57,12 +57,19 @@ def upload_file(filename):
     if not auth_ok:
         abort(401)
     
-    # Save file
-    if not request.data:
+    #check content length header
+    content_length = request.content_length
+    if content_length is None or content_length == 0:
         abort(400)
     
     try:
-        success, message = file_service.save_uploaded_file(request.data, safe_relative_path)
+        #use streaming for all uploads to avoid memory issues
+        chunk_size = getattr(config, 'UPLOAD_CHUNK_SIZE', 64 * 1024)
+        success, message = file_service.save_uploaded_file_stream(
+            request.stream,
+            safe_relative_path,
+            chunk_size=chunk_size
+        )
         if success:
             return jsonify({
                 "status": "success",

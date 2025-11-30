@@ -44,6 +44,11 @@ class Config:
     PORT = int(os.getenv("PORT", 8000))
     DEBUG = os.getenv("DEBUG", "true").lower() == "true"
     
+    # Upload settings
+    MAX_UPLOAD_SIZE_GB = float(os.getenv("MAX_UPLOAD_SIZE_GB", "10"))
+    MAX_CONTENT_LENGTH = int(MAX_UPLOAD_SIZE_GB * 1024 * 1024 * 1024)  #convert to bytes
+    UPLOAD_CHUNK_SIZE = 64 * 1024  #64KB chunks for streaming
+    
     @classmethod
     def is_secret_key_secure(cls) -> bool:
         """Check if the secret key is secure (not the default)."""

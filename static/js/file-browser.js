@@ -693,6 +693,11 @@ const FileBrowser = {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
             
+            //set timeout based on file size (min 5 min, add 1 min per 100MB)
+            const baseTimeoutMs = 5 * 60 * 1000;
+            const sizeTimeoutMs = Math.ceil(file.size / (100 * 1024 * 1024)) * 60 * 1000;
+            xhr.timeout = baseTimeoutMs + sizeTimeoutMs;
+            
             xhr.upload.addEventListener('progress', (e) => {
                 if (e.lengthComputable && onProgress) {
                     onProgress(e.loaded, e.total);
@@ -713,6 +718,10 @@ const FileBrowser = {
             
             xhr.addEventListener('abort', () => {
                 reject(new Error('Upload aborted'));
+            });
+            
+            xhr.addEventListener('timeout', () => {
+                reject(new Error('Upload timed out - file may be too large or connection too slow'));
             });
             
             xhr.open('POST', url);

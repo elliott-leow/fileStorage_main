@@ -355,5 +355,62 @@ class FileService:
         except Exception as e:
             print(f"Error during upload: {e}")
             return False, str(e)
+    
+    def save_uploaded_file_stream(
+        self,
+        stream,
+        destination_rel: str,
+        chunk_size: int = 64 * 1024
+    ) -> Tuple[bool, str]:
+        """
+        Save uploaded file from stream (for large files).
+        
+        Args:
+            stream: File-like stream object to read from
+            destination_rel: Relative destination path
+            chunk_size: Size of chunks to read/write
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        dest_abs = self.get_absolute_path(destination_rel)
+        
+        if not self.is_safe_path(dest_abs):
+            return False, "Forbidden path"
+        
+        try:
+            dest_dir = os.path.dirname(dest_abs)
+            os.makedirs(dest_dir, exist_ok=True)
+            
+            bytes_written = 0
+            with open(dest_abs, "wb") as f:
+                while True:
+                    chunk = stream.read(chunk_size)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    bytes_written += len(chunk)
+            
+            size_mb = bytes_written / (1024 * 1024)
+            print(f"File uploaded (streamed): {dest_abs} ({size_mb:.2f} MB)")
+            return True, "File uploaded successfully"
+        except IOError as e:
+            #cleanup partial file on error
+            if os.path.exists(dest_abs):
+                try:
+                    os.remove(dest_abs)
+                except:
+                    pass
+            print(f"IOError writing file {dest_abs}: {e}")
+            return False, f"IO Error: {e}"
+        except Exception as e:
+            #cleanup partial file on error
+            if os.path.exists(dest_abs):
+                try:
+                    os.remove(dest_abs)
+                except:
+                    pass
+            print(f"Error during upload: {e}")
+            return False, str(e)
 
 

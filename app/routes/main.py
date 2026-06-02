@@ -44,6 +44,38 @@ def _build_breadcrumbs(display_path: str):
     return crumbs
 
 
+def _wants_json() -> bool:
+    """Agents can request JSON via ?format=json or an Accept: application/json header."""
+    if request.args.get("format") == "json":
+        return True
+    accept = request.headers.get("Accept", "")
+    return "application/json" in accept and "text/html" not in accept
+
+
+def _entry_to_json(info: dict) -> dict:
+    """Serialize a listing/search entry into a clean JSON object for agents."""
+    etype = "shortcut" if info.get("is_shortcut") else ("dir" if info.get("is_dir") else "file")
+    out = {
+        "name": info.get("display_name"),
+        "path": info.get("rel_path"),
+        "type": etype,
+        "size": info.get("size"),
+        "size_bytes": info.get("size_bytes"),
+        "modified": info.get("mtime"),
+        "modified_ts": info.get("mtime_ts"),
+        "protected": bool(info.get("is_protected")),
+        "hidden": bool(info.get("is_hidden")),
+        "url": "/" + (info.get("rel_path_encoded") or ""),
+    }
+    if info.get("score"):
+        out["score"] = info["score"]
+    snippet = info.get("snippet")
+    if snippet:
+        import html as _html
+        out["snippet"] = _html.unescape(snippet.replace("<mark>", "").replace("</mark>", ""))
+    return out
+
+
 @main_bp.route("/", defaults={"path": ""})
 @main_bp.route("/<path:path>")
 def serve(path):
@@ -203,6 +235,21 @@ def serve(path):
             )
         
         current_path_display = normalize_path_display(norm_current_path)
+
+        # Agent-friendly JSON response (listing or search results)
+        if _wants_json():
+            if permission_denied:
+                return jsonify(
+                    error="Access denied", path=norm_current_path, requires_key=True
+                ), 403
+            return jsonify({
+                "path": norm_current_path,
+                "is_search": bool(is_smart_search_results or filename_search_query),
+                "query": smart_query or filename_search_query or None,
+                "breadcrumbs": _build_breadcrumbs(current_path_display),
+                "count": len(sorted_entries),
+                "entries": [_entry_to_json(i) for i in sorted_entries.values()],
+            })
 
         return render_template(
             "index.html",

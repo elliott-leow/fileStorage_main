@@ -1,5 +1,19 @@
 """Tests for snippet building and score normalization (pure, model-free)."""
-from app.services.search_service import make_snippet, _minmax
+from app.services.search_service import make_snippet, _minmax, cap_chunks
+
+
+def test_cap_chunks_samples_evenly():
+    chunks = list(range(1000))
+    out = cap_chunks(chunks, 50)
+    assert len(out) == 50
+    assert out[0] == 0                 # starts at the beginning
+    assert out[-1] >= 950              # reaches near the end (covers whole doc)
+    assert out == sorted(out)          # preserves order
+
+
+def test_cap_chunks_no_op_when_small():
+    assert cap_chunks([1, 2, 3], 50) == [1, 2, 3]
+    assert cap_chunks([1, 2, 3], 0) == [1, 2, 3]   # 0 = unlimited
 
 
 def test_snippet_highlights_query_terms():

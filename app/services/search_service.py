@@ -89,6 +89,51 @@ def make_snippet(text: str, query: str, window: int = 40) -> str:
     return snippet
 
 
+def extract_text_file(filepath: str, max_file_size_mb: int) -> Optional[str]:
+    """Module-level text extraction (used by parallel index builds)."""
+    _, ext = os.path.splitext(filepath)
+    ext = ext.lower()
+    try:
+        if os.path.getsize(filepath) > max_file_size_mb * 1024 * 1024:
+            return None
+    except OSError:
+        return None
+    try:
+        if ext in (".txt", ".md", ".markdown"):
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        if ext == ".pdf":
+            try:
+                import pypdf
+            except ImportError:
+                return None
+            text = []
+            try:
+                for page in pypdf.PdfReader(filepath).pages:
+                    t = page.extract_text()
+                    if t:
+                        text.append(t)
+            except Exception:
+                return None
+            return "\n".join(text)
+    except Exception:
+        return None
+    return None
+
+
+def _extract_worker(args):
+    filepath, max_mb = args
+    return filepath, extract_text_file(filepath, max_mb)
+
+
+def cap_chunks(chunks: List[str], cap: int) -> List[str]:
+    """Return at most `cap` chunks, sampled evenly across the document."""
+    if cap and len(chunks) > cap:
+        step = len(chunks) / cap
+        return [chunks[int(i * step)] for i in range(cap)]
+    return chunks
+
+
 def _minmax(d: Dict[str, float]) -> Dict[str, float]:
     if not d:
         return {}
@@ -110,6 +155,7 @@ class SearchService:
         max_chunk_size: int = 500,
         chunk_overlap: int = 80,
         max_file_size_mb: int = 50,
+        max_chunks_per_file: int = 0,
         rerank_model_name: Optional[str] = None,
         top_n: int = 15,
         rerank_candidates: int = 30,
@@ -125,6 +171,7 @@ class SearchService:
         self.max_chunk_size = max_chunk_size
         self.chunk_overlap = chunk_overlap
         self.max_file_size_mb = max_file_size_mb
+        self.max_chunks_per_file = max_chunks_per_file
         self.top_n = top_n
         self.rerank_candidates = rerank_candidates
         self.w_rerank, self.w_pop, self.w_traj = w_rerank, w_pop, w_traj
@@ -207,9 +254,11 @@ class SearchService:
     def encode_query(self, query: str) -> Optional["np.ndarray"]:
         if not self._ensure_model():
             return None
+        # bge models want a query instruction prefix; MiniLM and others do not.
+        if "bge" in self.model_name.lower():
+            query = BGE_QUERY_INSTRUCTION + query
         vec = self.model.encode(
-            BGE_QUERY_INSTRUCTION + query,
-            normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False,
+            query, normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False,
         )
         return np.asarray(vec, dtype=np.float32)
 
@@ -297,19 +346,38 @@ class SearchService:
         texts: List[str] = []
         metadata: List[Dict[str, Any]] = []
 
+        # Collect eligible files
+        file_list = []
         for root, _, files in os.walk(public_dir):
             for filename in files:
                 _, ext = os.path.splitext(filename)
-                if ext.lower() not in self.supported_extensions:
-                    continue
-                abs_path = os.path.join(root, filename)
-                rel_path = os.path.relpath(abs_path, public_dir).replace(os.sep, "/")
-                content = self.extract_text_from_file(abs_path)
-                if not content:
-                    continue
-                for i, chunk in enumerate(self._chunk_text(content)):
-                    texts.append(chunk)
-                    metadata.append({"path": rel_path, "chunk_index": i, "text": chunk})
+                if ext.lower() in self.supported_extensions:
+                    file_list.append(os.path.join(root, filename))
+        print(f"Extracting text from {len(file_list)} files across CPU cores...")
+
+        # Parallel text extraction (spawn context avoids torch/fork deadlocks)
+        import concurrent.futures
+        import multiprocessing as _mp
+        args = [(p, self.max_file_size_mb) for p in file_list]
+        try:
+            ctx = _mp.get_context("spawn")
+            with concurrent.futures.ProcessPoolExecutor(
+                max_workers=max(1, os.cpu_count() or 2), mp_context=ctx
+            ) as ex:
+                results = list(ex.map(_extract_worker, args, chunksize=4))
+        except Exception as e:
+            print(f"Parallel extraction failed ({e}); using sequential.")
+            results = [_extract_worker(a) for a in args]
+
+        for filepath, content in results:
+            if not content:
+                continue
+            rel_path = os.path.relpath(filepath, public_dir).replace(os.sep, "/")
+            chunks = cap_chunks(self._chunk_text(content), self.max_chunks_per_file)
+            for i, chunk in enumerate(chunks):
+                texts.append(chunk)
+                metadata.append({"path": rel_path, "chunk_index": i, "text": chunk})
+        print(f"Extracted {len(texts)} chunks from {len(set(m['path'] for m in metadata))} files; embedding...")
 
         dim = self.model.get_sentence_embedding_dimension()
         if texts:

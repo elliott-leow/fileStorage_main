@@ -22,9 +22,13 @@ FOLDER_KEYS_CONFIG=folder_keys.json
 FOLDER_VISIBILITY_CONFIG=folder_visibility.json
 
 #semantic search settings (embeddings + cross-encoder reranker)
-SEMANTIC_MODEL=BAAI/bge-small-en-v1.5
+#all-MiniLM-L6-v2 indexes ~6x faster on a Pi CPU; use BAAI/bge-small-en-v1.5 for
+#higher recall if you can afford a much longer index build.
+SEMANTIC_MODEL=sentence-transformers/all-MiniLM-L6-v2
 SEARCH_RERANK_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
 CACHE_DIR=~/.cache/filebrowser_cache
+#cap chunks indexed per file (evenly sampled); keeps builds fast on big PDFs
+MAX_CHUNKS_PER_FILE=30
 
 #analytics (activity logging + dashboard); set false to disable
 ANALYTICS_ENABLED=true

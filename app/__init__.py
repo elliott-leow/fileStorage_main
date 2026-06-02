@@ -98,6 +98,7 @@ def _init_services(app: Flask, config: Config) -> None:
         max_chunk_size=config.MAX_CHUNK_SIZE,
         chunk_overlap=config.CHUNK_OVERLAP,
         max_file_size_mb=config.MAX_FILE_SIZE_MB,
+        max_chunks_per_file=config.MAX_CHUNKS_PER_FILE,
         rerank_model_name=config.SEARCH_RERANK_MODEL,
         top_n=config.SEARCH_TOP_N,
         rerank_candidates=config.SEARCH_RERANK_CANDIDATES,

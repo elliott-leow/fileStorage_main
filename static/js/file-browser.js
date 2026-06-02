@@ -20,6 +20,9 @@ const FileBrowser = {
         this.setupCreateShortcutModal();
         this.setupUploadFileModal();
         this.setupDownloadZip();
+        this.setupSort();
+        this.setupPreview();
+        this.setupKeyboardShortcuts();
     },
     
     /**
@@ -110,7 +113,7 @@ const FileBrowser = {
             if (link && listItem) {
                 event.preventDefault();
                 const targetHref = link.getAttribute('href');
-                const folderName = link.querySelector('.folder-name')?.textContent.trim() || targetHref;
+                const folderName = link.querySelector('.file-name')?.textContent.trim() || targetHref;
                 showModal(targetHref, folderName);
             }
         });
@@ -1134,6 +1137,137 @@ const FileBrowser = {
                 uploadFileConfirmBtn.textContent = 'Upload';
             }
         }
+    },
+
+    /**
+     * Client-side sorting of the file list (name / size / date).
+     */
+    setupSort() {
+        const list = document.getElementById('file-list');
+        const buttons = document.querySelectorAll('.sort-btn');
+        if (!list || !buttons.length) return;
+
+        const state = { key: null, dir: 1 };
+        const sortBy = (key) => {
+            if (state.key === key) {
+                state.dir *= -1;
+            } else {
+                state.key = key;
+                state.dir = key === 'name' ? 1 : -1; // size/date default newest/biggest first
+            }
+            const items = Array.from(list.querySelectorAll('.file-item'));
+            items.sort((a, b) => {
+                if (key === 'name') {
+                    return (a.dataset.name || '').localeCompare(b.dataset.name || '') * state.dir;
+                }
+                const av = parseFloat(a.dataset[key] || '0');
+                const bv = parseFloat(b.dataset[key] || '0');
+                return (av - bv) * state.dir;
+            });
+            items.forEach((it) => list.appendChild(it));
+            buttons.forEach((btn) => {
+                const active = btn.dataset.sort === key;
+                btn.classList.toggle('is-active', active);
+                const dirEl = btn.querySelector('.dir');
+                if (dirEl) dirEl.textContent = active ? (state.dir > 0 ? '↑' : '↓') : '';
+            });
+        };
+
+        buttons.forEach((btn) => btn.addEventListener('click', () => sortBy(btn.dataset.sort)));
+    },
+
+    /**
+     * Inline preview (PDF / image / text) instead of forcing a download.
+     * The preview fetch carries ?preview=1 so the server logs a 'preview' event.
+     */
+    setupPreview() {
+        const fileList = document.getElementById('file-list');
+        const modal = document.getElementById('previewModal');
+        if (!fileList || !modal) return;
+
+        const body = document.getElementById('previewBody');
+        const nameEl = document.getElementById('previewName');
+        const dl = document.getElementById('previewDownload');
+        const closeBtn = document.getElementById('previewCloseBtn');
+        const IMG = /\.(png|jpe?g|gif|svg|webp|bmp|ico)$/i;
+        const TEXT = /\.(txt|md|markdown|log|json|csv|ya?ml|ini|conf|py|js|css|html?|xml|sh)$/i;
+        const PDF = /\.pdf$/i;
+
+        ModalManager.register('previewModal', { onClose: () => { if (body) body.innerHTML = ''; } });
+        if (closeBtn) closeBtn.addEventListener('click', () => ModalManager.hide('previewModal'));
+
+        const withParam = (href, p) => href + (href.includes('?') ? '&' : '?') + p;
+
+        fileList.addEventListener('click', (event) => {
+            const link = event.target.closest('a.file-link');
+            if (!link || link.classList.contains('protected-folder-link')) return;
+            const href = link.getAttribute('href');
+            const decoded = decodeURIComponent(href);
+            if (!(IMG.test(decoded) || TEXT.test(decoded) || PDF.test(decoded))) return;
+
+            event.preventDefault();
+            const name = link.querySelector('.file-name')?.textContent.trim() || decoded;
+            if (nameEl) nameEl.textContent = name;
+            if (dl) dl.setAttribute('href', withParam(href, 'download=1'));
+            const url = withParam(href, 'preview=1');
+            body.innerHTML = '';
+
+            if (IMG.test(decoded)) {
+                const img = document.createElement('img');
+                img.src = url;
+                img.alt = name;
+                body.appendChild(img);
+            } else if (TEXT.test(decoded)) {
+                const pre = document.createElement('pre');
+                pre.textContent = 'Loading…';
+                fetch(url)
+                    .then((r) => r.text())
+                    .then((t) => { pre.textContent = t; })
+                    .catch(() => { pre.textContent = 'Could not load file.'; });
+                body.appendChild(pre);
+            } else {
+                const iframe = document.createElement('iframe');
+                iframe.src = url;
+                iframe.title = name;
+                body.appendChild(iframe);
+            }
+            ModalManager.show('previewModal');
+        });
+    },
+
+    /**
+     * Keyboard shortcuts: '/' focus search, Esc blur, arrows select, Enter open.
+     */
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (event) => {
+            const tag = (event.target.tagName || '').toLowerCase();
+            const typing = tag === 'input' || tag === 'textarea' || event.target.isContentEditable;
+
+            if (event.key === '/' && !typing) {
+                const s = document.getElementById('search');
+                if (s) { event.preventDefault(); s.focus(); s.select(); }
+                return;
+            }
+            if (event.key === 'Escape' && typing) { event.target.blur(); return; }
+            if (typing) return;
+
+            const items = Array.from(document.querySelectorAll('.file-item'));
+            if (!items.length) return;
+            let idx = items.findIndex((it) => it.classList.contains('is-selected'));
+
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                event.preventDefault();
+                idx = event.key === 'ArrowDown'
+                    ? Math.min(items.length - 1, idx + 1)
+                    : (idx <= 0 ? 0 : idx - 1);
+                items.forEach((it) => it.classList.remove('is-selected'));
+                items[idx].classList.add('is-selected');
+                items[idx].scrollIntoView({ block: 'nearest' });
+            } else if (event.key === 'Enter' && idx >= 0) {
+                const link = items[idx].querySelector('a.file-link');
+                if (link) link.click();
+            }
+        });
     }
 };
 

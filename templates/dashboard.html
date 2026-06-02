@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+    <title>{{ title }}</title>
+    <script>(function(){try{var t=localStorage.getItem('theme');document.documentElement.classList.toggle('dark', t? t==='dark' : true);}catch(e){}})();</script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="container">
+    <header class="masthead">
+        <div class="row-between">
+            <div class="brand"><h1><span class="prompt">›</span> analytics</h1></div>
+            <div class="row gap-1">
+                <a href="/" class="btn btn-ghost text-sm">← Files</a>
+                <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme"><span id="theme-icon">🌙</span></button>
+            </div>
+        </div>
+    </header>
+
+    {% if not authorized %}
+    <div class="card" style="max-width:420px;margin:8vh auto;padding:26px">
+        <h3 style="margin:0 0 6px;font-size:17px;font-weight:700">Dashboard locked</h3>
+        <p class="subtext text-sm" style="margin:0 0 16px">Enter the master key (or upload key) to view analytics.</p>
+        <form method="post">
+            <input type="password" name="key" class="input" placeholder="Key" autofocus>
+            {% if error %}<div class="form-error">{{ error }}</div>{% endif %}
+            <div class="modal-actions"><button type="submit" class="btn btn-primary">Unlock</button></div>
+        </form>
+    </div>
+    {% elif not analytics_enabled %}
+    <div class="empty">Analytics is disabled (set ANALYTICS_ENABLED=true).</div>
+    {% else %}
+
+    {% set t = summary.totals %}
+    <div class="dash-grid">
+        <!-- Totals -->
+        <section class="card dash-card">
+            <h2>Overview</h2>
+            <div class="stat-grid">
+                <div class="stat"><div class="num">{{ t.opens }}</div><div class="lbl">file opens</div></div>
+                <div class="stat"><div class="num">{{ t.previews }}</div><div class="lbl">previews</div></div>
+                <div class="stat"><div class="num">{{ t.searches }}</div><div class="lbl">searches</div></div>
+                <div class="stat"><div class="num">{{ t.navigates }}</div><div class="lbl">folder views</div></div>
+                <div class="stat"><div class="num">{{ t.unique_files }}</div><div class="lbl">unique files</div></div>
+                <div class="stat"><div class="num">{{ t.sessions }}</div><div class="lbl">sessions</div></div>
+            </div>
+        </section>
+
+        <!-- Searches over time -->
+        <section class="card dash-card">
+            <h2>Searches · last 30 days</h2>
+            {% set sot = summary.searches_over_time %}
+            {% if sot %}
+            {% set smax = (sot | map(attribute='count') | max) %}
+            <div class="spark">
+                {% for d in sot %}
+                <div class="b" style="height:{{ (d.count / smax * 100) | round(1) }}%" title="{{ d.date }}: {{ d.count }}"></div>
+                {% endfor %}
+            </div>
+            <div class="row-between text-xs muted mono" style="margin-top:8px">
+                <span>{{ sot[0].date }}</span><span>{{ sot[-1].date }}</span>
+            </div>
+            {% else %}<div class="empty">No searches yet.</div>{% endif %}
+        </section>
+
+        <!-- Top files -->
+        <section class="card dash-card half">
+            <h2>Most opened files</h2>
+            {% set tf = summary.top_files %}
+            {% if tf %}{% set fmax = (tf | map(attribute='count') | max) %}
+            {% for f in tf %}
+            <div class="bar-row">
+                <span class="lbl" title="/{{ f.path }}">{{ f.path.split('/')[-1] }}</span>
+                <span class="val">{{ f.count }}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:{{ (f.count / fmax * 100) | round(1) }}%"></div></div>
+            </div>
+            {% endfor %}
+            {% else %}<div class="empty">No opens yet.</div>{% endif %}
+        </section>
+
+        <!-- Top queries -->
+        <section class="card dash-card half">
+            <h2>Top searches</h2>
+            {% set tq = summary.top_queries %}
+            {% if tq %}{% set qmax = (tq | map(attribute='count') | max) %}
+            {% for q in tq %}
+            <div class="bar-row">
+                <span class="lbl">{{ q.query }}</span>
+                <span class="val">{{ q.count }}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:{{ (q.count / qmax * 100) | round(1) }}%"></div></div>
+            </div>
+            {% endfor %}
+            {% else %}<div class="empty">No searches yet.</div>{% endif %}
+        </section>
+
+        <!-- Top folders -->
+        <section class="card dash-card half">
+            <h2>Most visited folders</h2>
+            {% set tfo = summary.top_folders %}
+            {% if tfo %}{% set omax = (tfo | map(attribute='count') | max) %}
+            {% for f in tfo %}
+            <div class="bar-row">
+                <span class="lbl">/{{ f.path }}</span>
+                <span class="val">{{ f.count }}</span>
+                <div class="bar-track"><div class="bar-fill" style="width:{{ (f.count / omax * 100) | round(1) }}%"></div></div>
+            </div>
+            {% endfor %}
+            {% else %}<div class="empty">No navigation yet.</div>{% endif %}
+        </section>
+
+        <!-- Navigation flow -->
+        <section class="card dash-card half">
+            <h2>Navigation flow</h2>
+            {% set ft = summary.folder_transitions %}
+            {% if ft %}
+            {% for tr in ft %}
+            <div class="flow-row">
+                <span class="from truncate">/{{ tr.from }}</span>
+                <span class="arrow">→</span>
+                <span class="to truncate">/{{ tr.to }}</span>
+                <span class="n">{{ tr.count }}×</span>
+            </div>
+            {% endfor %}
+            {% else %}<div class="empty">Not enough data yet.</div>{% endif %}
+        </section>
+
+        <!-- Recent activity -->
+        <section class="card dash-card">
+            <h2>Recent activity</h2>
+            {% set ra = summary.recent_activity %}
+            {% if ra %}
+            <ul class="feed">
+                {% for e in ra %}
+                <li>
+                    <span class="type {{ e.type }}">{{ e.type }}</span>
+                    <span class="what">{% if e.type == 'search' %}“{{ e.query }}”{% else %}/{{ e.path }}{% endif %}</span>
+                    <span class="when">{{ e.ts | localtime }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="empty">No activity yet.</div>{% endif %}
+        </section>
+    </div>
+    {% endif %}
+</div>
+<script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+</body>
+</html>

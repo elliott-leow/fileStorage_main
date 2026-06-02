@@ -51,7 +51,10 @@ def create_app(config_name: str = None) -> Flask:
     
     # Register blueprints
     register_blueprints(app)
-    
+
+    # Template filters
+    _register_template_filters(app)
+
     # Register error handlers
     _register_error_handlers(app)
     
@@ -108,6 +111,18 @@ def _init_services(app: Flask, config: Config) -> None:
         analytics_service=app.analytics_service,
         encode_fn=app.search_service.encode_texts,
     )
+
+
+def _register_template_filters(app: Flask) -> None:
+    """Jinja filters used by templates."""
+    import datetime as _dt
+
+    @app.template_filter("localtime")
+    def _localtime(ts):
+        try:
+            return _dt.datetime.fromtimestamp(ts).strftime("%b %d, %H:%M")
+        except Exception:
+            return ""
 
 
 def _register_error_handlers(app: Flask) -> None:

@@ -180,6 +180,7 @@ class SearchService:
         self.reranker = None     # lazy; False once a load attempt failed
         self.index_data: Optional[Dict[str, Any]] = None
         self._bm25: Optional[BM25] = None
+        self._index_mtime = 0.0
         self.deps_ok = False
 
         os.makedirs(cache_dir, exist_ok=True)
@@ -295,9 +296,22 @@ class SearchService:
             data = {**data, "embeddings": data["embeddings"][:ec], "metadata": data["metadata"][:ec]}
         self.index_data = data
         self._build_bm25()
+        try:
+            self._index_mtime = os.path.getmtime(self.index_file_path)
+        except OSError:
+            pass
         state = "complete" if data.get("complete", True) else "partial (building)"
         print(f"Loaded {state} index: {self.index_data['embeddings'].shape[0]} chunks "
               f"from {len(set(m['path'] for m in self.index_data['metadata']))} files.")
+
+    def _maybe_reload(self) -> None:
+        """Reload the index if it changed on disk (build checkpoints / progressive search)."""
+        try:
+            mtime = os.path.getmtime(self.index_file_path)
+        except OSError:
+            return
+        if mtime > self._index_mtime + 0.5:
+            self._load_index()
 
     def _validate_index(self, data: Dict) -> bool:
         if not isinstance(data, dict) or data.get("version") != 2:
@@ -474,6 +488,7 @@ class SearchService:
         now: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """Run the full hybrid+rerank pipeline and return ranked files."""
+        self._maybe_reload()  # pick up new build checkpoints automatically
         if not self.is_index_ready or self._bm25 is None:
             return []
         qvec = self.encode_query(query)

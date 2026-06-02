@@ -1,0 +1,26 @@
+[Unit]
+Description=File Server (Catppuccin, hybrid search, analytics)
+Documentation=https://github.com/elliott-leow/fileStorage_main
+# Wait for networking + Tailscale; keep retrying through the boot race so the
+# bind to the Tailscale IP succeeds once tailscaled has assigned it.
+After=network-online.target tailscaled.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=elliott
+Group=elliott
+WorkingDirectory=/home/elliott/Desktop/fileserver
+Environment=FLASK_ENV=production
+Environment=HOST=100.89.115.69
+Environment=PORT=8000
+ExecStart=/home/elliott/Desktop/fileserver/venv/bin/python /home/elliott/Desktop/fileserver/run.py
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=fileserver
+
+[Install]
+WantedBy=multi-user.target

@@ -35,30 +35,28 @@ class Config:
     SHORTCUTS_CONFIG_FILE = os.getenv("SHORTCUTS_CONFIG", "shortcuts.json")
     
     # Search settings.
-    # all-MiniLM-L6-v2 is the default: ~6x faster to index on a Pi CPU than
-    # bge-small, and the cross-encoder reranker recovers the precision. Set
-    # SEMANTIC_MODEL=BAAI/bge-small-en-v1.5 for higher recall if you can afford
-    # a much longer index build.
-    SEMANTIC_MODEL_NAME = os.getenv("SEMANTIC_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    # bge-small-en-v1.5 = best recall (default). all-MiniLM-L6-v2 indexes ~4x
+    # faster on a CPU if you'd rather trade a little quality for build speed.
+    SEMANTIC_MODEL_NAME = os.getenv("SEMANTIC_MODEL", "BAAI/bge-small-en-v1.5")
     SEARCH_RERANK_MODEL = os.getenv("SEARCH_RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
     SEMANTIC_INDEX_FILE = "semantic_index_v2.pkl"
     CACHE_DIR = os.path.expanduser(os.getenv("CACHE_DIR", "~/.cache/filebrowser_cache"))
 
     # Hybrid search tuning
     SEARCH_TOP_N = int(os.getenv("SEARCH_TOP_N", 15))            # results returned
-    SEARCH_RERANK_CANDIDATES = int(os.getenv("SEARCH_RERANK_CANDIDATES", 15))  # before rerank (Pi latency)
+    SEARCH_RERANK_CANDIDATES = int(os.getenv("SEARCH_RERANK_CANDIDATES", 30))  # before rerank
     SEARCH_W_RERANK = float(os.getenv("SEARCH_W_RERANK", 0.70))      # cross-encoder weight
     SEARCH_W_POPULARITY = float(os.getenv("SEARCH_W_POPULARITY", 0.15))  # access freq/recency
     SEARCH_W_TRAJECTORY = float(os.getenv("SEARCH_W_TRAJECTORY", 0.15))  # P(file | path)
 
     # File processing settings
     SUPPORTED_EXTENSIONS = [".txt", ".pdf", ".md", ".markdown"]
-    MAX_CHUNK_SIZE = 160   # Words per chunk (short = fast on CPU, fine for retrieval)
-    CHUNK_OVERLAP = 30     # Words of overlap between consecutive chunks
+    MAX_CHUNK_SIZE = 256   # Words per chunk (good context; fits bge's 512-token limit)
+    CHUNK_OVERLAP = 64     # Words of overlap between consecutive chunks
     MAX_FILE_SIZE_MB = 50  # Skip files larger than this
-    # Cap chunks per file (evenly sampled across the doc) so giant textbooks
-    # don't blow up index-build time. 0 = unlimited.
-    MAX_CHUNKS_PER_FILE = int(os.getenv("MAX_CHUNKS_PER_FILE", 30))
+    # Cap chunks per file (evenly sampled). 0 = unlimited (full content coverage,
+    # including big textbooks) — slower build but every passage is searchable.
+    MAX_CHUNKS_PER_FILE = int(os.getenv("MAX_CHUNKS_PER_FILE", 0))
 
     # Analytics settings
     ANALYTICS_ENABLED = os.getenv("ANALYTICS_ENABLED", "true").lower() == "true"

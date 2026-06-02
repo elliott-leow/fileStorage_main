@@ -264,22 +264,40 @@ class SearchService:
 
     # ------------------------------------------------------------- indexing
 
-    def _load_index(self) -> None:
+    def _read_index_file(self) -> Optional[Dict[str, Any]]:
         if not os.path.exists(self.index_file_path):
-            print("Semantic index not found. POST /rebuild-index to build.")
-            return
+            return None
         try:
             with open(self.index_file_path, "rb") as f:
-                data = pickle.load(f)
-            if not self._validate_index(data):
-                print("Index invalid or from a different model; rebuild recommended.")
-                return
-            self.index_data = data
-            self._build_bm25()
-            print(f"Loaded index: {data['embeddings'].shape[0]} chunks "
-                  f"from {len(set(m['path'] for m in data['metadata']))} files.")
+                return pickle.load(f)
         except Exception as e:
-            print(f"Error loading index: {e}")
+            print(f"Error reading index file: {e}")
+            return None
+
+    def _atomic_save(self, data: Dict[str, Any]) -> None:
+        """Write the index via a temp file + rename so a crash can't corrupt it."""
+        tmp = self.index_file_path + ".tmp"
+        with open(tmp, "wb") as f:
+            pickle.dump(data, f)
+        os.replace(tmp, self.index_file_path)
+
+    def _load_index(self) -> None:
+        data = self._read_index_file()
+        if data is None:
+            print("Semantic index not found. POST /rebuild-index to build.")
+            return
+        if not self._validate_index(data):
+            print("Index invalid or from a different model; rebuild recommended.")
+            return
+        # A build in progress is usable up to embedded_count.
+        ec = int(data.get("embedded_count", data["embeddings"].shape[0]))
+        if 0 < ec < data["embeddings"].shape[0]:
+            data = {**data, "embeddings": data["embeddings"][:ec], "metadata": data["metadata"][:ec]}
+        self.index_data = data
+        self._build_bm25()
+        state = "complete" if data.get("complete", True) else "partial (building)"
+        print(f"Loaded {state} index: {self.index_data['embeddings'].shape[0]} chunks "
+              f"from {len(set(m['path'] for m in self.index_data['metadata']))} files.")
 
     def _validate_index(self, data: Dict) -> bool:
         if not isinstance(data, dict) or data.get("version") != 2:
@@ -380,25 +398,57 @@ class SearchService:
         print(f"Extracted {len(texts)} chunks from {len(set(m['path'] for m in metadata))} files; embedding...")
 
         dim = self.model.get_sentence_embedding_dimension()
-        if texts:
-            embeddings = self.encode_texts(texts)
-        else:
-            embeddings = np.zeros((0, dim), dtype=np.float32)
+        total = len(texts)
 
-        data = {"version": 2, "model": self.model_name, "dim": dim,
-                "embeddings": embeddings, "metadata": metadata}
-        try:
-            with open(self.index_file_path, "wb") as f:
-                pickle.dump(data, f)
-        except Exception as e:
-            print(f"Error saving index: {e}")
-            return None
+        if total == 0:
+            data = {"version": 2, "model": self.model_name, "dim": dim,
+                    "embeddings": np.zeros((0, dim), dtype=np.float32),
+                    "metadata": [], "total": 0, "embedded_count": 0, "complete": True}
+            self._atomic_save(data)
+            self.index_data = data
+            self._build_bm25()
+            return data
 
-        self.index_data = data
+        embeddings = np.zeros((total, dim), dtype=np.float32)
+        start_at = 0
+
+        # Resume an interrupted build if the on-disk index matches this corpus.
+        prev = self._read_index_file()
+        if (prev and prev.get("model") == self.model_name and prev.get("total") == total
+                and isinstance(prev.get("embeddings"), np.ndarray)
+                and prev["embeddings"].shape == (total, dim)
+                and len(prev.get("metadata", [])) == total
+                and all(prev["metadata"][k]["path"] == metadata[k]["path"]
+                        for k in range(0, total, max(1, total // 50)))):
+            embeddings = prev["embeddings"].astype(np.float32)
+            start_at = min(int(prev.get("embedded_count", 0)), total)
+            if start_at:
+                print(f"Resuming embedding from {start_at}/{total}.", flush=True)
+
+        # Embed in batches, checkpointing after each so the long build is
+        # crash-resilient and searchable while still in progress.
+        BATCH = 2000
+        for s in range(start_at, total, BATCH):
+            e = min(s + BATCH, total)
+            embeddings[s:e] = self.encode_texts(texts[s:e])
+            data = {"version": 2, "model": self.model_name, "dim": dim,
+                    "embeddings": embeddings, "metadata": metadata,
+                    "total": total, "embedded_count": e, "complete": e >= total}
+            try:
+                self._atomic_save(data)
+            except Exception as ex:
+                print(f"Error saving checkpoint: {ex}")
+            print(f"Embedded {e}/{total} ({100 * e / total:.1f}%) "
+                  f"elapsed={int(time.time() - start)}s", flush=True)
+
+        # Finalize (serve only the embedded rows, which is all of them now).
+        self.index_data = {"version": 2, "model": self.model_name, "dim": dim,
+                           "embeddings": embeddings, "metadata": metadata,
+                           "total": total, "embedded_count": total, "complete": True}
         self._build_bm25()
         print(f"Indexed {len(set(m['path'] for m in metadata))} files / "
-              f"{len(texts)} chunks in {time.time() - start:.1f}s.")
-        return data
+              f"{total} chunks in {time.time() - start:.1f}s.")
+        return self.index_data
 
     # --------------------------------------------------------------- search
 

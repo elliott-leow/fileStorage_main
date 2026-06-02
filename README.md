@@ -1,17 +1,28 @@
 # File Server
 
-A modern, modular Flask-based file server with semantic search, folder protection, and a clean web interface.
+A modular Flask file server with hybrid semantic search, trajectory-aware
+ranking, activity analytics, and a self-hosted Catppuccin interface — designed
+to run on a Raspberry Pi for 1–2 users.
 
 ## Features
 
-- **File Browsing**: Navigate directories and download files
-- **Semantic Search**: AI-powered content search using sentence transformers
+- **File Browsing**: Breadcrumb navigation, sort by name/size/date, keyboard
+  shortcuts (`/` focus search, `↑/↓` select, `Enter` open, `Esc` close)
+- **Click-to-Preview**: View PDFs, images, and text inline (no forced download)
+- **Hybrid Smart Search**: `bge-small` embeddings + BM25 keyword scoring fused
+  with Reciprocal Rank Fusion, reranked by a cross-encoder, with highlighted
+  snippets — all running on CPU
+- **Trajectory-Aware Ranking**: search results are personalized by `P(file|path)`
+  — what you open given the folders you've browsed — using both your history and
+  semantic folder-name priors
+- **Activity Analytics**: searches, folder paths, and file opens logged to SQLite
+- **Analytics Dashboard**: `/dashboard` — top files, queries, folders, navigation
+  flow, and activity over time (dependency-free SVG charts)
 - **Filename Search**: Filter files by name with recursive option
-- **Folder Protection**: Password-protect specific folders
-- **Hidden Folders**: Hide folders from listings (accessible via direct link)
-- **File Upload**: Upload files and folders via web interface or API
-- **File Deletion**: Delete files/folders with confirmation
-- **Dark Mode**: Toggle between light and dark themes
+- **Folder Protection / Hidden Folders / Master Unlock / Shortcuts**
+- **File Upload & Deletion**: via the web UI or API
+- **Catppuccin Theme**: self-hosted CSS — Mocha (dark, default) / Latte (light),
+  no CDN, works offline
 
 ## Project Structure
 
@@ -26,28 +37,25 @@ fileStorage_main/
 │   │   ├── api.py              # API endpoints
 │   │   └── upload.py           # Upload functionality
 │   ├── services/                # Business logic services
-│   │   ├── __init__.py
-│   │   ├── auth_service.py     # Authentication/authorization
-│   │   ├── file_service.py     # File operations
-│   │   ├── visibility_service.py # Hidden folder management
-│   │   └── search_service.py   # Semantic search
-│   └── utils/                   # Utility modules
-│       ├── __init__.py
-│       ├── path_utils.py       # Path manipulation
-│       └── file_utils.py       # File info utilities
+│   │   ├── auth_service.py        # Authentication/authorization
+│   │   ├── file_service.py        # File operations
+│   │   ├── visibility_service.py  # Hidden folder management
+│   │   ├── shortcut_service.py    # Folder shortcuts
+│   │   ├── search_service.py      # Hybrid+rerank semantic search
+│   │   ├── bm25.py                # BM25 keyword ranking
+│   │   ├── fusion.py              # Reciprocal rank fusion
+│   │   ├── analytics_service.py   # SQLite activity logging
+│   │   └── navigation_service.py  # P(file|path) trajectory model
+│   └── utils/                   # Path + file info helpers
 ├── templates/                   # Jinja2 templates
 │   ├── index.html              # Main file browser
-│   ├── upload.html             # Upload interface
+│   ├── dashboard.html          # Analytics dashboard
 │   ├── error.html              # Error pages
-│   └── partials/               # Reusable template parts
-│       └── modals.html         # Modal dialogs
-├── static/                      # Static assets
-│   ├── css/
-│   │   └── styles.css          # Custom styles
-│   └── js/
-│       ├── theme.js            # Theme management
-│       ├── modals.js           # Modal utilities
-│       └── file-browser.js     # Main browser logic
+│   └── partials/modals.html    # Modal dialogs (incl. preview)
+├── static/
+│   ├── css/app.css             # Self-hosted Catppuccin design system
+│   └── js/                      # theme.js, modals.js, file-browser.js
+├── tests/                       # pytest suite (logic units)
 ├── public/                      # Served files directory
 ├── folder_keys.json            # Protected folders config
 ├── folder_visibility.json      # Hidden folders config
@@ -298,9 +306,52 @@ For production, consider using:
 - **Utils**: Stateless helper functions
 - **Config**: Environment-based configuration
 
-## Legacy Support
+## Search & Analytics
 
-The original monolithic `serve_public_modern.py` is kept for reference but the new modular structure in `app/` is recommended for development.
+### Models
+
+Smart search uses two CPU models (downloaded once to `CACHE_DIR` / the HF cache):
+
+| Role | Model | Size |
+|------|-------|------|
+| Embeddings | `BAAI/bge-small-en-v1.5` | ~130 MB |
+| Reranker | `cross-encoder/ms-marco-MiniLM-L-6-v2` | ~90 MB |
+
+Both load lazily on the first smart search. Preinstall them ahead of time:
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer, CrossEncoder; \
+  SentenceTransformer('BAAI/bge-small-en-v1.5'); \
+  CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+```
+
+Then build the content index (`.txt`, `.md`, `.pdf`):
+
+```bash
+curl -X POST http://localhost:8000/rebuild-index -H "X-Upload-Key: your-api-key"
+```
+
+### Pipeline
+
+`query → bge embeddings + BM25 → reciprocal rank fusion → cross-encoder rerank
+→ blend popularity + P(file|path) → highlighted snippets`
+
+`P(file|path)` personalizes results from your browsing trajectory this session,
+combining learned folder→target co-occurrence with semantic folder-name priors.
+
+### Analytics & Dashboard
+
+Activity (searches, folder views, opens, previews) is logged to a local SQLite
+DB (`analytics.db`, gitignored) and grouped into idle-timeout sessions. Visit
+`/dashboard` (unlocked with the master key, or the upload key if none is set)
+for charts of top files, queries, folders, navigation flow, and activity over
+time. Disable logging with `ANALYTICS_ENABLED=false`.
+
+## Tests
+
+```bash
+python -m pytest -q   # logic units: bm25, fusion, analytics, navigation, search, config
+```
 
 ## License
 

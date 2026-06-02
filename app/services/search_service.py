@@ -167,6 +167,12 @@ class SearchService:
             return False
         device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
         try:
+            # Use all CPU cores for embedding/rerank (esp. for index builds).
+            if torch and device == "cpu":
+                try:
+                    torch.set_num_threads(max(1, os.cpu_count() or 1))
+                except Exception:
+                    pass
             print(f"Loading embedding model {self.model_name} on {device}...")
             self.model = SentenceTransformer(self.model_name, device=device)
             return True

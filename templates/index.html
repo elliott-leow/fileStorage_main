@@ -23,6 +23,21 @@
             {% endif %}
         </div>
         <div id="normal-actions" class="flex items-center space-x-2 flex-shrink-0">
+            {% if master_key_configured %}
+                {% if master_unlocked %}
+                <span title="Master Unlocked" class="p-2 text-amber-500 dark:text-amber-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2h-1V7a4 4 0 00-8 0v1H5V7a5 5 0 0110 0v2h.5" />
+                    </svg>
+                </span>
+                {% else %}
+                <button id="master-key-btn" title="Master Unlock" class="p-2 rounded hover:bg-amber-100 dark:hover:bg-amber-900 text-amber-600 dark:text-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd" />
+                    </svg>
+                </button>
+                {% endif %}
+            {% endif %}
             {% if delete_key_configured %}
             <button id="delete-mode-btn" title="Enter Delete Mode" class="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -42,6 +57,11 @@
                 </svg>
             </button>
             {% endif %}
+            <button id="create-shortcut-btn" title="Create Shortcut" class="p-2 rounded hover:bg-teal-100 dark:hover:bg-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 text-teal-600 dark:text-teal-400">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+            </button>
             <button id="create-folder-btn" title="New Folder" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-green-500 text-gray-600 dark:text-gray-400">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
@@ -114,10 +134,15 @@
         {% for rel_path_key, info in entries.items() %}
         <li class="bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md transition-shadow" data-name="{{ info.display_name|lower }}" {% if info.is_protected %}data-protected="true"{% endif %}>
             <div class="flex items-center justify-between p-3">
-                <input type="checkbox" class="delete-checkbox" name="delete_item" value="{{ info.rel_path }}" aria-label="Select {{ info.display_name }}">
-                <a href="/{{ info.rel_path_encoded }}" class="flex items-center space-x-2 min-w-0 group {% if info.is_dir and info.is_protected %}protected-folder-link{% endif %}" title="/{{ info.rel_path }}">
+                {% if not info.get('is_shortcut') %}<input type="checkbox" class="delete-checkbox" name="delete_item" value="{{ info.rel_path }}" aria-label="Select {{ info.display_name }}">{% endif %}
+                <a href="/{{ info.rel_path_encoded }}" class="flex items-center space-x-2 min-w-0 flex-grow group {% if info.is_dir and info.is_protected %}protected-folder-link{% endif %}" title="/{{ info.rel_path }}">
                     <span class="text-xl flex-shrink-0 w-6 text-center relative">
-                        {% if info.is_dir %}
+                        {% if info.get('is_shortcut') %}
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-teal-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 11l3 3m0 0l-3 3m3-3H8" stroke-width="2" />
+                                </svg>
+                        {% elif info.is_dir %}
                             {% if show_hidden_files and info.is_hidden %}
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2,2">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
@@ -145,6 +170,13 @@
                     {% if is_smart_search_results and info.matched_name and not info.score %}<span class="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full ml-1">Name</span>{% elif is_smart_search_results and info.matched_name and info.score %}<span class="text-xs px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full ml-1">Both</span>{% endif %}
                 </a>
                 <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0 pl-3">{{ info.size }}<span class="mx-1">•</span>{{ info.mtime }}</span>
+                {% if info.is_dir and not info.get('is_shortcut') %}
+                <button type="button" class="download-zip-btn p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-500 dark:text-gray-400 flex-shrink-0 ml-2" data-path="{{ info.rel_path }}" title="Download as ZIP">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                </button>
+                {% endif %}
             </div>
             {% if search_query or smart_query %}
             <div class="text-xs text-gray-500 dark:text-gray-400 px-3 pb-2 pl-12 truncate"><span class="font-mono">/{{ info.rel_path }}</span></div>
@@ -177,7 +209,9 @@ document.addEventListener('DOMContentLoaded', function() {
         showHiddenFiles: {{ show_hidden_files | tojson }},
         currentPath: {{ current_path | tojson }},
         parentUrl: {{ parent_url | tojson }},
-        isCurrentPathHidden: {{ is_current_path_hidden | tojson }}
+        isCurrentPathHidden: {{ is_current_path_hidden | tojson }},
+        masterKeyConfigured: {{ master_key_configured | tojson }},
+        masterUnlocked: {{ master_unlocked | tojson }}
     });
 });
 </script>

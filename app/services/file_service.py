@@ -108,54 +108,6 @@ class FileService:
         
         return entries, True
     
-    def get_all_directories(
-        self, 
-        start_path: str = "", 
-        show_hidden: bool = False
-    ) -> List[str]:
-        """
-        Recursively get all directory paths within a start path.
-        
-        Args:
-            start_path: Starting relative path (empty for root)
-            show_hidden: Whether to include hidden directories
-            
-        Returns:
-            List of relative directory paths
-        """
-        start_abs = self.get_absolute_path(start_path)
-        dir_list = []
-        
-        try:
-            for root, dirs, _ in os.walk(start_abs, topdown=True):
-                if not self.is_safe_path(root):
-                    dirs[:] = []
-                    continue
-                
-                rel_root = os.path.relpath(root, self.public_dir)
-                norm_rel_root = normalize_path(rel_root)
-                
-                # Check if hidden
-                if not show_hidden and norm_rel_root and self.visibility_service.is_hidden(norm_rel_root):
-                    dirs[:] = []
-                    continue
-                
-                if rel_root != ".":
-                    dir_list.append(normalize_path_display(rel_root))
-                
-                # Filter directories for safety
-                safe_dirs = [
-                    d for d in dirs 
-                    if self.is_safe_path(os.path.join(root, d))
-                ]
-                dirs[:] = safe_dirs
-                
-        except OSError as e:
-            print(f"Error walking directory {start_abs}: {e}")
-        
-        dir_list.sort()
-        return dir_list
-    
     def find_by_name(
         self, 
         query: str, 
@@ -320,77 +272,49 @@ class FileService:
             "errors": errors
         }
     
-    def save_uploaded_file(
-        self, 
-        data: bytes, 
-        destination_rel: str
-    ) -> Tuple[bool, str]:
-        """
-        Save uploaded file data.
-        
-        Args:
-            data: File data
-            destination_rel: Relative destination path
-            
-        Returns:
-            Tuple of (success, message)
-        """
-        dest_abs = self.get_absolute_path(destination_rel)
-        
-        if not self.is_safe_path(dest_abs):
-            return False, "Forbidden path"
-        
-        try:
-            dest_dir = os.path.dirname(dest_abs)
-            os.makedirs(dest_dir, exist_ok=True)
-            
-            with open(dest_abs, "wb") as f:
-                f.write(data)
-            
-            print(f"File uploaded: {dest_abs}")
-            return True, "File uploaded successfully"
-        except IOError as e:
-            print(f"IOError writing file {dest_abs}: {e}")
-            return False, f"IO Error: {e}"
-        except Exception as e:
-            print(f"Error during upload: {e}")
-            return False, str(e)
-    
     def save_uploaded_file_stream(
         self,
         stream,
         destination_rel: str,
-        chunk_size: int = 64 * 1024
+        chunk_size: int = 64 * 1024,
+        max_bytes: Optional[int] = None
     ) -> Tuple[bool, str]:
         """
         Save uploaded file from stream (for large files).
-        
+
         Args:
             stream: File-like stream object to read from
             destination_rel: Relative destination path
             chunk_size: Size of chunks to read/write
-            
+            max_bytes: Maximum allowed file size in bytes (None for no limit)
+
         Returns:
             Tuple of (success, message)
         """
         dest_abs = self.get_absolute_path(destination_rel)
-        
+
         if not self.is_safe_path(dest_abs):
             return False, "Forbidden path"
-        
+
         try:
             dest_dir = os.path.dirname(dest_abs)
             os.makedirs(dest_dir, exist_ok=True)
-            
+
             bytes_written = 0
             with open(dest_abs, "wb") as f:
                 while True:
                     chunk = stream.read(chunk_size)
                     if not chunk:
                         break
-                    f.write(chunk)
                     bytes_written += len(chunk)
-            
+                    if max_bytes is not None and bytes_written > max_bytes:
+                        f.close()
+                        if os.path.exists(dest_abs):
+                            os.remove(dest_abs)
+                        size_limit_mb = max_bytes / (1024 * 1024)
+                        return False, f"File exceeds maximum size of {size_limit_mb:.0f} MB"
+                    f.write(chunk)
+
             size_mb = bytes_written / (1024 * 1024)
             print(f"File uploaded (streamed): {dest_abs} ({size_mb:.2f} MB)")
             return True, "File uploaded successfully"
@@ -399,7 +323,7 @@ class FileService:
             if os.path.exists(dest_abs):
                 try:
                     os.remove(dest_abs)
-                except:
+                except OSError:
                     pass
             print(f"IOError writing file {dest_abs}: {e}")
             return False, f"IO Error: {e}"
@@ -408,7 +332,7 @@ class FileService:
             if os.path.exists(dest_abs):
                 try:
                     os.remove(dest_abs)
-                except:
+                except OSError:
                     pass
             print(f"Error during upload: {e}")
             return False, str(e)

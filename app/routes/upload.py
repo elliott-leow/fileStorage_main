@@ -57,18 +57,20 @@ def upload_file(filename):
     if not auth_ok:
         abort(401)
     
-    #check content length header
+    #check content length header - reject explicitly empty, allow unknown (chunked)
     content_length = request.content_length
-    if content_length is None or content_length == 0:
+    if content_length == 0:
         abort(400)
-    
+
     try:
         #use streaming for all uploads to avoid memory issues
         chunk_size = getattr(config, 'UPLOAD_CHUNK_SIZE', 64 * 1024)
+        max_bytes = getattr(config, 'MAX_CONTENT_LENGTH', None)
         success, message = file_service.save_uploaded_file_stream(
             request.stream,
             safe_relative_path,
-            chunk_size=chunk_size
+            chunk_size=chunk_size,
+            max_bytes=max_bytes
         )
         if success:
             return jsonify({

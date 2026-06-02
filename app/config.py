@@ -10,8 +10,12 @@ load_dotenv()
 class Config:
     """Base configuration class."""
     
-    # Flask settings
-    SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-insecure-fallback-key")
+    # Flask settings (accept either env name for robustness)
+    SECRET_KEY = (
+        os.getenv("FLASK_SECRET_KEY")
+        or os.getenv("FLASK_SECRET")
+        or "dev-insecure-fallback-key"
+    )
     
     # File storage settings
     PUBLIC_DIR = os.path.expanduser(os.getenv("PUBLIC_DIR", "./public"))
@@ -28,16 +32,31 @@ class Config:
     # Configuration file paths
     FOLDER_KEYS_CONFIG_FILE = os.getenv("FOLDER_KEYS_CONFIG", "folder_keys.json")
     FOLDER_VISIBILITY_CONFIG_FILE = os.getenv("FOLDER_VISIBILITY_CONFIG", "folder_visibility.json")
+    SHORTCUTS_CONFIG_FILE = os.getenv("SHORTCUTS_CONFIG", "shortcuts.json")
     
     # Search settings
-    SEMANTIC_MODEL_NAME = os.getenv("SEMANTIC_MODEL", "all-MiniLM-L6-v2")
-    SEMANTIC_INDEX_FILE = "semantic_index.pkl"
+    SEMANTIC_MODEL_NAME = os.getenv("SEMANTIC_MODEL", "BAAI/bge-small-en-v1.5")
+    SEARCH_RERANK_MODEL = os.getenv("SEARCH_RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
+    SEMANTIC_INDEX_FILE = "semantic_index_v2.pkl"
     CACHE_DIR = os.path.expanduser(os.getenv("CACHE_DIR", "~/.cache/filebrowser_cache"))
-    
+
+    # Hybrid search tuning
+    SEARCH_TOP_N = int(os.getenv("SEARCH_TOP_N", 15))            # results returned
+    SEARCH_RERANK_CANDIDATES = int(os.getenv("SEARCH_RERANK_CANDIDATES", 30))  # before rerank
+    SEARCH_W_RERANK = float(os.getenv("SEARCH_W_RERANK", 0.70))      # cross-encoder weight
+    SEARCH_W_POPULARITY = float(os.getenv("SEARCH_W_POPULARITY", 0.15))  # access freq/recency
+    SEARCH_W_TRAJECTORY = float(os.getenv("SEARCH_W_TRAJECTORY", 0.15))  # P(file | path)
+
     # File processing settings
-    SUPPORTED_EXTENSIONS = [".txt", ".pdf"]
-    MAX_CHUNK_SIZE = 500  # Max words per chunk for embedding
+    SUPPORTED_EXTENSIONS = [".txt", ".pdf", ".md", ".markdown"]
+    MAX_CHUNK_SIZE = 500   # Max words per chunk for embedding
+    CHUNK_OVERLAP = 80     # Words of overlap between consecutive chunks
     MAX_FILE_SIZE_MB = 50  # Skip files larger than this
+
+    # Analytics settings
+    ANALYTICS_ENABLED = os.getenv("ANALYTICS_ENABLED", "true").lower() == "true"
+    ANALYTICS_DB_FILE = os.getenv("ANALYTICS_DB", "analytics.db")
+    SESSION_IDLE_TIMEOUT_MIN = int(os.getenv("SESSION_IDLE_TIMEOUT_MIN", 30))
     
     # Server settings
     HOST = os.getenv("HOST", "0.0.0.0")

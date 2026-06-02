@@ -15,8 +15,11 @@ const FileBrowser = {
         this.setupDeleteMode();
         this.setupHiddenToggle();
         this.setupViewHiddenModal();
+        this.setupMasterKeyModal();
         this.setupCreateFolderModal();
+        this.setupCreateShortcutModal();
         this.setupUploadFileModal();
+        this.setupDownloadZip();
     },
     
     /**
@@ -472,6 +475,78 @@ const FileBrowser = {
     },
     
     /**
+     * Setup master key modal
+     */
+    setupMasterKeyModal() {
+        if (!this.config.masterKeyConfigured || this.config.masterUnlocked) return;
+
+        const masterKeyBtn = document.getElementById('master-key-btn');
+        const masterKeyInput = document.getElementById('masterKeyInput');
+        const masterKeyError = document.getElementById('masterKeyError');
+        const masterKeyCancelBtn = document.getElementById('masterKeyCancelBtn');
+        const masterKeyConfirmBtn = document.getElementById('masterKeyConfirmBtn');
+
+        if (!masterKeyBtn) return;
+
+        ModalManager.register('masterKeyModal');
+
+        masterKeyBtn.addEventListener('click', () => {
+            if (masterKeyInput) masterKeyInput.value = '';
+            if (masterKeyError) masterKeyError.textContent = '';
+            ModalManager.show('masterKeyModal');
+            if (masterKeyInput) masterKeyInput.focus();
+        });
+
+        if (masterKeyCancelBtn) {
+            masterKeyCancelBtn.addEventListener('click', () => ModalManager.hide('masterKeyModal'));
+        }
+
+        if (masterKeyConfirmBtn) {
+            masterKeyConfirmBtn.addEventListener('click', async () => {
+                const key = masterKeyInput?.value;
+                if (!key) {
+                    if (masterKeyError) masterKeyError.textContent = 'Password required.';
+                    return;
+                }
+
+                masterKeyConfirmBtn.disabled = true;
+
+                try {
+                    const response = await fetch('/validate-master-key', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: key })
+                    });
+
+                    const result = await response.json();
+                    if (response.ok && result.status === 'success') {
+                        location.reload();
+                    } else {
+                        if (masterKeyError) masterKeyError.textContent = result.message || 'Invalid master key.';
+                        if (masterKeyInput) {
+                            masterKeyInput.focus();
+                            masterKeyInput.select();
+                        }
+                    }
+                } catch (e) {
+                    if (masterKeyError) masterKeyError.textContent = 'Network error.';
+                } finally {
+                    masterKeyConfirmBtn.disabled = false;
+                }
+            });
+        }
+
+        if (masterKeyInput) {
+            masterKeyInput.addEventListener('keypress', (event) => {
+                if (event.key === 'Enter' && masterKeyConfirmBtn && !masterKeyConfirmBtn.disabled) {
+                    event.preventDefault();
+                    masterKeyConfirmBtn.click();
+                }
+            });
+        }
+    },
+
+    /**
      * Setup create folder modal
      */
     setupCreateFolderModal() {
@@ -575,6 +650,87 @@ const FileBrowser = {
         });
     },
     
+    /**
+     * Setup create shortcut modal
+     */
+    setupCreateShortcutModal() {
+        const createShortcutBtn = document.getElementById('create-shortcut-btn');
+        const shortcutName = document.getElementById('shortcutName');
+        const shortcutTarget = document.getElementById('shortcutTarget');
+        const shortcutKey = document.getElementById('shortcutKey');
+        const createShortcutError = document.getElementById('createShortcutError');
+        const createShortcutCancelBtn = document.getElementById('createShortcutCancelBtn');
+        const createShortcutConfirmBtn = document.getElementById('createShortcutConfirmBtn');
+
+        if (!createShortcutBtn) return;
+
+        ModalManager.register('createShortcutModal');
+
+        createShortcutBtn.addEventListener('click', () => {
+            if (shortcutName) shortcutName.value = '';
+            if (shortcutTarget) shortcutTarget.value = '';
+            if (shortcutKey) shortcutKey.value = '';
+            if (createShortcutError) createShortcutError.textContent = '';
+            ModalManager.show('createShortcutModal');
+            if (shortcutName) shortcutName.focus();
+        });
+
+        if (createShortcutCancelBtn) {
+            createShortcutCancelBtn.addEventListener('click', () => ModalManager.hide('createShortcutModal'));
+        }
+
+        if (createShortcutConfirmBtn) {
+            createShortcutConfirmBtn.addEventListener('click', async () => {
+                const name = shortcutName?.value.trim();
+                const target = shortcutTarget?.value.trim();
+                const key = shortcutKey?.value;
+
+                if (!name || !target || !key) {
+                    if (createShortcutError) createShortcutError.textContent = 'All fields are required.';
+                    return;
+                }
+
+                createShortcutConfirmBtn.disabled = true;
+                if (createShortcutError) createShortcutError.textContent = '';
+
+                try {
+                    const response = await fetch('/api/create-shortcut', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            name: name,
+                            location: this.config.currentPath,
+                            target: target,
+                            key: key
+                        })
+                    });
+
+                    const result = await response.json();
+                    if (response.ok) {
+                        location.reload();
+                    } else {
+                        if (createShortcutError) createShortcutError.textContent = result.error || 'Failed.';
+                    }
+                } catch (e) {
+                    if (createShortcutError) createShortcutError.textContent = 'Network error.';
+                } finally {
+                    createShortcutConfirmBtn.disabled = false;
+                }
+            });
+        }
+
+        [shortcutTarget, shortcutKey].forEach(input => {
+            if (input) {
+                input.addEventListener('keypress', (event) => {
+                    if (event.key === 'Enter' && createShortcutConfirmBtn && !createShortcutConfirmBtn.disabled) {
+                        event.preventDefault();
+                        createShortcutConfirmBtn.click();
+                    }
+                });
+            }
+        });
+    },
+
     /**
      * Setup upload file modal
      */
@@ -776,6 +932,27 @@ const FileBrowser = {
     /**
      * Perform file upload
      */
+    /**
+     * Setup download as zip buttons for folders
+     */
+    setupDownloadZip() {
+        const fileList = document.getElementById('file-list');
+        if (!fileList) return;
+
+        fileList.addEventListener('click', (event) => {
+            const btn = event.target.closest('.download-zip-btn');
+            if (!btn) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const folderPath = btn.dataset.path;
+            if (!folderPath) return;
+
+            window.location.href = `/api/download-folder?path=${encodeURIComponent(folderPath)}`;
+        });
+    },
+
     async performUpload() {
         const uploadFileInput = document.getElementById('uploadFileInput');
         const uploadModeFolder = document.getElementById('uploadModeFolder');

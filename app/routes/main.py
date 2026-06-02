@@ -30,6 +30,7 @@ def serve(path):
     auth_service = current_app.auth_service
     visibility_service = current_app.visibility_service
     search_service = current_app.search_service
+    shortcut_service = current_app.shortcut_service
     config = current_app.config_obj
     
     # Get query parameters
@@ -129,7 +130,23 @@ def serve(path):
                         entries[entry["rel_path"]] = entry
                 else:
                     title += " (Error Listing Directory)"
-        
+
+                # Inject shortcuts for this directory
+                for sc in shortcut_service.get_shortcuts_for_path(norm_current_path):
+                    sc_key = "__shortcut__/" + (sc["location"] + "/" if sc["location"] else "") + sc["name"]
+                    entries[sc_key] = {
+                        "is_dir": True,
+                        "is_shortcut": True,
+                        "display_name": sc["name"],
+                        "rel_path": sc_key,
+                        "rel_path_encoded": sc["target"].strip("/"),
+                        "size": "\u2192 " + sc["target"],
+                        "mtime": "",
+                        "is_protected": False,
+                        "is_hidden": False,
+                        "error": False,
+                    }
+
         # Sort entries
         if is_smart_search_results:
             sorted_entries = entries
@@ -156,7 +173,9 @@ def serve(path):
             delete_key_configured=config.DELETE_KEY_CONFIGURED,
             hidden_key_configured=config.HIDDEN_KEY_CONFIGURED,
             is_current_path_hidden=is_current_path_hidden,
-            show_hidden_files=show_hidden_files
+            show_hidden_files=show_hidden_files,
+            master_key_configured=len(auth_service.master_keys) > 0,
+            master_unlocked=auth_service.is_master_unlocked()
         )
     
     abort(500)
@@ -293,6 +312,30 @@ def validate_access_key():
         return jsonify(status="error", message="Server error."), 500
 
 
+@main_bp.route("/validate-master-key", methods=["POST"])
+def validate_master_key():
+    """Validate a master key and grant full access if correct."""
+    auth_service = current_app.auth_service
+    visibility_service = current_app.visibility_service
+
+    try:
+        data = request.get_json()
+        if not data or "key" not in data:
+            return jsonify(status="error", message="Missing key."), 400
+
+        provided_key = data["key"]
+
+        if auth_service.validate_master_key(provided_key):
+            auth_service.apply_master_access(visibility_service)
+            return jsonify(status="success", message="Master access granted."), 200
+        else:
+            return jsonify(status="error", message="Invalid master key."), 401
+
+    except Exception as e:
+        print(f"Error in /validate-master-key: {e}")
+        return jsonify(status="error", message="Server error."), 500
+
+
 @main_bp.route("/health")
 def health_check():
     """Provide basic health information."""
@@ -311,18 +354,5 @@ def health_check():
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-
-
-@main_bp.route("/upload-ui")
-def upload_ui():
-    """Serve the upload interface."""
-    file_service = current_app.file_service
-    destination_dirs = file_service.get_all_directories()
-    
-    return render_template(
-        "upload.html",
-        title="Upload File",
-        destination_dirs=destination_dirs
-    )
 
 

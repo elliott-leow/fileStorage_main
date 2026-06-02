@@ -58,18 +58,24 @@ class VisibilityService:
     
     def is_hidden(self, path: str) -> bool:
         """
-        Check if a path is hidden.
-        
+        Check if a path or any of its ancestors is hidden.
+
         Args:
             path: The relative path to check
-            
+
         Returns:
-            True if hidden
+            True if hidden (either directly or via an ancestor)
         """
         norm_path = os.path.normpath(path.strip("/"))
         if norm_path == ".":
             return False  # Root cannot be hidden
-        return norm_path in self.hidden_paths
+        # Check the path itself and all ancestor paths
+        current = norm_path
+        while current and current != ".":
+            if current in self.hidden_paths:
+                return True
+            current = os.path.dirname(current)
+        return False
     
     def hide_path(self, path: str) -> bool:
         """

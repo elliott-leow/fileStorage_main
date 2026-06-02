@@ -3,7 +3,6 @@ Path manipulation and safety utilities.
 """
 import os
 import urllib.parse
-from typing import Optional, Tuple
 
 
 def check_path_safety(path_abs: str, public_dir: str) -> bool:
@@ -62,26 +61,6 @@ def normalize_path_display(path: str) -> str:
     return path
 
 
-def get_safe_path(relative_path: str, public_dir: str) -> Tuple[Optional[str], str]:
-    """
-    Get a safe absolute path from a relative path.
-    
-    Args:
-        relative_path: The relative path
-        public_dir: The public directory root
-        
-    Returns:
-        Tuple of (absolute_path or None if unsafe, normalized relative path)
-    """
-    norm_rel_path = normalize_path(relative_path)
-    abs_path = os.path.normpath(os.path.join(public_dir, norm_rel_path))
-    
-    if not check_path_safety(abs_path, public_dir):
-        return None, norm_rel_path
-    
-    return abs_path, norm_rel_path
-
-
 def url_encode_path(path: str) -> str:
     """
     URL encode a path, preserving slashes.
@@ -111,31 +90,5 @@ def url_decode_path(path: str) -> str:
         return urllib.parse.unquote(path)
     except Exception:
         return path
-
-
-def get_parent_path(path: str) -> str:
-    """
-    Get the parent path of a given path.
-    
-    Args:
-        path: The path
-        
-    Returns:
-        Parent path
-    """
-    return os.path.dirname(path.strip("/"))
-
-
-def join_paths(*paths: str) -> str:
-    """
-    Join paths safely.
-    
-    Args:
-        paths: Path components to join
-        
-    Returns:
-        Joined path
-    """
-    return normalize_path(os.path.join(*paths))
 
 

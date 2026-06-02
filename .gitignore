@@ -2,3 +2,17 @@
 folder_keys.json
 venv/
 /public
+
+# Runtime / generated
+analytics.db
+*.db
+*.db-wal
+*.db-shm
+server.log
+semantic_index*.pkl
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+tests/.tmp/

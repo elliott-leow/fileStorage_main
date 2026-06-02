@@ -20,11 +20,13 @@ def main():
     # Create app
     app = create_app(config_name)
     
-    # Run the application
+    # Run the application. threaded=True so a slow search request never blocks
+    # concurrent file downloads (the cross-encoder rerank can take a second or two).
     app.run(
         host=config.HOST,
         port=config.PORT,
-        debug=config.DEBUG
+        debug=config.DEBUG,
+        threaded=True
     )
 
 

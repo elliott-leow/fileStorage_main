@@ -77,6 +77,20 @@
     </div>
 </div>
 
+<!-- Master Key Modal -->
+<div id="masterKeyModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-amber-700 dark:text-amber-300 mb-3">Master Unlock</h3>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Enter the master password to unlock all protected and hidden folders.</p>
+        <input type="password" id="masterKeyInput" autocomplete="current-password" class="block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-amber-500 focus:border-amber-500" placeholder="Master Password">
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="masterKeyError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="masterKeyCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="masterKeyConfirmBtn" class="px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700">Unlock</button>
+        </div>
+    </div>
+</div>
+
 <!-- Create Folder Modal -->
 <div id="createFolderModal" class="modal-overlay">
     <div class="modal-content">
@@ -105,6 +119,32 @@
         <div class="mt-5 flex justify-end space-x-3">
             <button type="button" id="createFolderCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
             <button type="button" id="createFolderConfirmBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">Create</button>
+        </div>
+    </div>
+</div>
+
+<!-- Create Shortcut Modal -->
+<div id="createShortcutModal" class="modal-overlay">
+    <div class="modal-content">
+        <h3 class="text-lg font-medium text-teal-700 dark:text-teal-300 mb-3">Create Shortcut</h3>
+        <div class="space-y-4">
+            <div>
+                <label for="shortcutName" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Shortcut Name</label>
+                <input type="text" id="shortcutName" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-teal-500 focus:border-teal-500" placeholder="My Shortcut">
+            </div>
+            <div>
+                <label for="shortcutTarget" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Target Folder Path</label>
+                <input type="text" id="shortcutTarget" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-teal-500 focus:border-teal-500" placeholder="path/to/target/folder">
+            </div>
+            <div>
+                <label for="shortcutKey" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Upload/Admin Key</label>
+                <input type="password" id="shortcutKey" class="mt-1 block w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 focus:ring-teal-500 focus:border-teal-500" placeholder="API Key">
+            </div>
+        </div>
+        <div class="mt-2 text-sm text-red-600 dark:text-red-400 h-5" id="createShortcutError"></div>
+        <div class="mt-5 flex justify-end space-x-3">
+            <button type="button" id="createShortcutCancelBtn" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">Cancel</button>
+            <button type="button" id="createShortcutConfirmBtn" class="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700">Create</button>
         </div>
     </div>
 </div>

@@ -19,6 +19,7 @@ class AuthService:
         """
         self.config_file = config_file
         self.protected_folders: Dict[str, str] = {}
+        self.master_keys: list = []
         self.load_folder_keys()
     
     def load_folder_keys(self) -> None:
@@ -27,8 +28,9 @@ class AuthService:
             if os.path.exists(self.config_file):
                 with open(self.config_file, "r") as f:
                     config_data = json.load(f)
+                    self.master_keys = config_data.get("master_keys", [])
                     raw_paths = config_data.get("protected_paths", [])
-                    
+
                     # Sort by path length (longest first) for proper matching
                     sorted_paths = sorted(
                         raw_paths, 
@@ -74,7 +76,10 @@ class AuthService:
                 reverse=True
             )
             
-            config_data = {"protected_paths": protected_paths_list}
+            config_data = {
+                "master_keys": self.master_keys,
+                "protected_paths": protected_paths_list
+            }
             with open(self.config_file, "w") as f:
                 json.dump(config_data, f, indent=4)
             return True
@@ -215,5 +220,39 @@ class AuthService:
                 return True
         
         return False
+
+    def validate_master_key(self, key: str) -> bool:
+        """
+        Check if a key is a valid master key.
+
+        Args:
+            key: The key to validate
+
+        Returns:
+            True if the key is a valid master key
+        """
+        return key in self.master_keys
+
+    def apply_master_access(self, visibility_service) -> None:
+        """
+        Grant full access: unlock all protected folders and show all hidden folders.
+
+        Args:
+            visibility_service: The visibility service instance
+        """
+        self.grant_session_access("")
+        visibility_service.set_show_hidden_session(True)
+        session["master_unlocked"] = True
+        session.modified = True
+
+    @staticmethod
+    def is_master_unlocked() -> bool:
+        """
+        Check if the current session has master access.
+
+        Returns:
+            True if master key has been used in this session
+        """
+        return session.get("master_unlocked", False)
 
 

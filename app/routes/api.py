@@ -1,8 +1,10 @@
 """
 API routes for programmatic access.
 """
+import io
 import os
-from flask import Blueprint, request, jsonify, current_app
+import zipfile
+from flask import Blueprint, request, jsonify, current_app, Response
 
 from ..utils.path_utils import normalize_path
 
@@ -37,19 +39,20 @@ def list_dirs():
         ), 401
     
     # List subdirectories
+    show_hidden = visibility_service.get_show_hidden_session()
     subdirs_data = []
     try:
         for name in sorted(os.listdir(abs_path), key=lambda s: s.lower()):
             entry_abs = os.path.join(abs_path, name)
             if not file_service.is_safe_path(entry_abs):
                 continue
-            
+
             if os.path.isdir(entry_abs):
                 item_rel = normalize_path(os.path.join(norm_path, name))
-                
-                if visibility_service.is_hidden(item_rel):
+
+                if not show_hidden and visibility_service.is_hidden(item_rel):
                     continue
-                
+
                 subdirs_data.append({
                     "name": name,
                     "is_protected": auth_service.is_path_protected(item_rel)
@@ -225,25 +228,88 @@ def delete_items():
     return jsonify(result), status_code
 
 
+@api_bp.route("/create-shortcut", methods=["POST"])
+def create_shortcut():
+    """Create a folder shortcut."""
+    config = current_app.config_obj
+    shortcut_service = current_app.shortcut_service
+
+    data = request.get_json()
+    if not data:
+        return jsonify(error="Invalid request."), 400
+
+    name = data.get("name", "").strip()
+    location = data.get("location", "").strip("/")
+    target = data.get("target", "").strip().strip("/")
+    provided_key = data.get("key")
+
+    if not name:
+        return jsonify(error="Shortcut name required."), 400
+    if not target:
+        return jsonify(error="Target folder required."), 400
+    if not provided_key:
+        return jsonify(error="API Key required."), 401
+
+    if not config.UPLOAD_API_KEY:
+        return jsonify(error="Server upload key not configured."), 501
+    if provided_key != config.UPLOAD_API_KEY:
+        return jsonify(error="Invalid API Key."), 401
+
+    if shortcut_service.add_shortcut(name, location, target):
+        return jsonify(status="success", message=f"Shortcut '{name}' created."), 201
+    else:
+        return jsonify(error="Failed to save shortcut."), 500
+
+
+@api_bp.route("/delete-shortcut", methods=["POST"])
+def delete_shortcut():
+    """Delete a folder shortcut."""
+    config = current_app.config_obj
+    shortcut_service = current_app.shortcut_service
+
+    data = request.get_json()
+    if not data:
+        return jsonify(error="Invalid request."), 400
+
+    name = data.get("name", "").strip()
+    location = data.get("location", "").strip("/")
+    provided_key = data.get("key")
+
+    if not name:
+        return jsonify(error="Shortcut name required."), 400
+    if not provided_key:
+        return jsonify(error="API Key required."), 401
+
+    if not config.UPLOAD_API_KEY:
+        return jsonify(error="Server upload key not configured."), 501
+    if provided_key != config.UPLOAD_API_KEY:
+        return jsonify(error="Invalid API Key."), 401
+
+    if shortcut_service.remove_shortcut(name, location):
+        return jsonify(status="success", message=f"Shortcut '{name}' removed.")
+    else:
+        return jsonify(error="Failed to save shortcut removal."), 500
+
+
 @api_bp.route("/validate-upload-key", methods=["POST"])
 def validate_upload_key():
     """Validate upload key before starting upload."""
     config = current_app.config_obj
     auth_service = current_app.auth_service
-    
+
     data = request.get_json()
     if not data:
         return jsonify(error="Invalid request."), 400
-    
+
     provided_key = data.get("key", "")
     target_path = normalize_path(data.get("path", ""))
-    
+
     if not provided_key:
         return jsonify(error="Upload key required."), 400
-    
+
     #check folder-specific key first
     required_key = auth_service.get_required_key_for_path(target_path)
-    
+
     if required_key:
         #folder has specific key requirement
         if provided_key == required_key:
@@ -258,5 +324,49 @@ def validate_upload_key():
             return jsonify(status="success", message="Key valid.")
         else:
             return jsonify(error="Invalid upload key."), 401
+
+
+@api_bp.route("/download-folder", methods=["GET"])
+def download_folder():
+    """Download a folder as a zip file."""
+    file_service = current_app.file_service
+    auth_service = current_app.auth_service
+
+    folder_path = request.args.get("path", "").strip("/")
+    norm_path = normalize_path(folder_path)
+
+    abs_path = file_service.get_absolute_path(norm_path)
+    if not file_service.is_safe_path(abs_path):
+        return jsonify(error="Access forbidden."), 403
+    if not os.path.isdir(abs_path):
+        return jsonify(error="Path not found or not a directory."), 404
+
+    # Check authorization
+    required_key = auth_service.get_required_key_for_path(norm_path)
+    if required_key and not auth_service.has_session_access(norm_path, required_key):
+        return jsonify(error="Authentication required."), 401
+
+    # Build zip in memory
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in os.walk(abs_path):
+            # Filter out unsafe paths
+            dirs[:] = [d for d in dirs if file_service.is_safe_path(os.path.join(root, d))]
+            for filename in files:
+                file_abs = os.path.join(root, filename)
+                if not file_service.is_safe_path(file_abs):
+                    continue
+                arcname = os.path.relpath(file_abs, abs_path)
+                zf.write(file_abs, arcname)
+    zip_buffer.seek(0)
+
+    folder_name = os.path.basename(abs_path) if norm_path else "root"
+    zip_filename = f"{folder_name}.zip"
+
+    return Response(
+        zip_buffer.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{zip_filename}"'}
+    )
 
 

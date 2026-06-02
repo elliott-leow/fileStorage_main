@@ -9,6 +9,7 @@ from .services.auth_service import AuthService
 from .services.visibility_service import VisibilityService
 from .services.file_service import FileService
 from .services.search_service import SearchService
+from .services.shortcut_service import ShortcutService
 from .routes import register_blueprints
 
 
@@ -73,6 +74,9 @@ def _init_services(app: Flask, config: Config) -> None:
         visibility_service=app.visibility_service
     )
     
+    # Shortcut service
+    app.shortcut_service = ShortcutService(config.SHORTCUTS_CONFIG_FILE)
+
     # Search service
     app.search_service = SearchService(
         model_name=config.SEMANTIC_MODEL_NAME,
@@ -142,6 +146,7 @@ def _log_startup_info(app: Flask, config: Config) -> None:
     print(f"Global Upload API Key Configured: {'Yes' if config.UPLOAD_API_KEY else 'NO'}")
     print(f"Protected folders loaded: {len(app.auth_service.protected_folders)}")
     print(f"Hidden folders loaded: {len(app.visibility_service.hidden_paths)}")
+    print(f"Shortcuts loaded: {len(app.shortcut_service.shortcuts)}")
     print(f"Semantic Search Available: {app.search_service.is_available}")
     
     if app.search_service.is_available:

@@ -8,7 +8,7 @@ from datetime import datetime
 
 from flask import (
     Blueprint, render_template, send_from_directory, session,
-    abort, request, jsonify, current_app
+    abort, request, jsonify, current_app, Response
 )
 import humanize
 
@@ -52,6 +52,95 @@ def _wants_json() -> bool:
     return "application/json" in accept and "text/html" not in accept
 
 
+def _ai_mode() -> bool:
+    """True on the AI port (8001) or when ?ai=1 is set — returns self-describing Markdown."""
+    if request.args.get("ai") == "1":
+        return True
+    try:
+        return request.environ.get("SERVER_PORT") == str(current_app.config_obj.AI_PORT)
+    except Exception:
+        return False
+
+
+def _render_ai(path, entries, base, query, is_search, permission_denied) -> str:
+    """Self-describing Markdown page: folder contents + how to use them as context."""
+    import html as _html
+    out = []
+    w = out.append
+    here = f"/{path}" if path else "/ (root)"
+
+    w(f"# AI File Server — {here}")
+    w("")
+    w("You are an AI agent. This page lists a folder on a file server and tells you")
+    w("how to **download** its files to use as context, and how to **search, upload,**")
+    w("**move, and delete** files. Everything works from this base URL.")
+    w(f"\nThis (AI) API base: `{base}`  ·  human web UI is on port 8000.\n")
+
+    if permission_denied:
+        w("## 🔒 This folder is protected")
+        w("Unlock it for your session, then re-fetch this page:")
+        w("```bash")
+        w(f'curl -c jar.txt -X POST "{base}/validate-key" -H "Content-Type: application/json" \\')
+        w(f"     -d '{{\"path\": \"{path}\", \"key\": \"<FOLDER_KEY>\"}}'")
+        w(f'curl -b jar.txt "{base}/{path}"')
+        w("```")
+        return "\n".join(out) + "\n"
+
+    if is_search:
+        w(f"## Search results for: {query!r}")
+        w("Ranked best-first (each file has a relevance score and a content snippet).\n")
+    else:
+        w(f"## Folder: {here}\n")
+
+    dirs = [i for i in entries if i.get("is_dir") and not i.get("is_shortcut")]
+    shortcuts = [i for i in entries if i.get("is_shortcut")]
+    files = [i for i in entries if not i.get("is_dir")]
+
+    if dirs:
+        w("### Subfolders — fetch the AI page to navigate in")
+        for i in dirs:
+            w(f"- `{i['display_name']}/` → {base}/{i['rel_path_encoded']}")
+        w("")
+    if files:
+        w("### Files — download these to read as context")
+        for i in files:
+            extra = f"  [score {i['score']}]" if (is_search and i.get("score")) else ""
+            w(f"- **{i['display_name']}** ({i.get('size', '?')}){extra}")
+            w(f"  - download: {base}/{i['rel_path_encoded']}")
+            snip = i.get("snippet")
+            if snip:
+                plain = _html.unescape(snip.replace("<mark>", "").replace("</mark>", ""))
+                w(f"  - match: {plain}")
+        w("")
+    if shortcuts:
+        w("### Shortcuts")
+        for i in shortcuts:
+            w(f"- `{i['display_name']}` {i.get('size', '')}")
+        w("")
+    if not (dirs or files or shortcuts):
+        w("_This folder is empty._\n")
+
+    w("## How to use these files as context")
+    w("1. Choose the files you need above.")
+    w('2. Download each one: `curl -fL -o "NAME" "URL"` (a download URL is listed per file).')
+    w("3. Read the downloaded file and use its contents as context.\n")
+
+    w("## Operations (replace <…> placeholders; keys come from the operator)")
+    w(f"- **Download** a file: `curl -fL -o name \"{base}/<path>\"`")
+    w(f"- **Search** by meaning: fetch `{base}/?q=<query>` (this AI format) or add `&format=json`")
+    w(f"- **List** as JSON: `{base}/<path>?format=json`")
+    w(f"- **Upload**: `curl -X POST \"{base}/upload/<dest/path>\" -H \"X-Upload-Key: <KEY>\" --data-binary @localfile`")
+    w(f"- **Move/rename**: `curl -X POST \"{base}/api/move\" -H \"Content-Type: application/json\" -d '{{\"src\":\"<from>\",\"dst\":\"<to>\",\"key\":\"<KEY>\"}}'`")
+    w(f"- **Delete**: `curl -X POST \"{base}/api/delete-items\" -H \"X-Delete-Key: <DELETE_KEY>\" -H \"Content-Type: application/json\" -d '{{\"items_to_delete\":[\"<path>\"]}}'`")
+    w(f"- **New folder**: `curl -X POST \"{base}/api/create-folder\" -H \"Content-Type: application/json\" -d '{{\"parent_path\":\"<path>\",\"folder_name\":\"<name>\",\"key\":\"<KEY>\"}}'`")
+    w("")
+    w("## Notes")
+    w("- Listing & downloading public folders needs no key. Writes (upload/move/delete) need the shown key.")
+    w("- Protected folders return a 🔒 page with unlock instructions.")
+    w("- Paths are relative to the server root, forward-slash separated.")
+    return "\n".join(out) + "\n"
+
+
 def _entry_to_json(info: dict) -> dict:
     """Serialize a listing/search entry into a clean JSON object for agents."""
     etype = "shortcut" if info.get("is_shortcut") else ("dir" if info.get("is_dir") else "file")
@@ -92,7 +181,8 @@ def serve(path):
 
     # Get query parameters
     filename_search_query = request.args.get("search", "").strip()
-    smart_query = request.args.get("smart_query", "").strip()
+    # `q` is a short alias for smart_query (handy for AI links: /?q=...)
+    smart_query = (request.args.get("smart_query") or request.args.get("q") or "").strip()
     recursive = request.args.get("recursive", "true").lower() == "true"
     
     # Initialize template variables
@@ -250,6 +340,18 @@ def serve(path):
                 "count": len(sorted_entries),
                 "entries": [_entry_to_json(i) for i in sorted_entries.values()],
             })
+
+        # AI-navigable Markdown (port 8001, or ?ai=1)
+        if _ai_mode():
+            md = _render_ai(
+                norm_current_path,
+                list(sorted_entries.values()),
+                request.host_url.rstrip("/"),
+                smart_query or filename_search_query,
+                bool(is_smart_search_results or filename_search_query),
+                permission_denied,
+            )
+            return Response(md, mimetype="text/markdown")
 
         return render_template(
             "index.html",

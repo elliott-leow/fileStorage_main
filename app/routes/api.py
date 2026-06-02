@@ -216,6 +216,34 @@ def set_path_protection():
         return jsonify(error="Failed to save protection."), 500
 
 
+@api_bp.route("/move", methods=["POST"])
+def move_item():
+    """Move or rename a file/folder (requires the upload key)."""
+    config = current_app.config_obj
+    file_service = current_app.file_service
+
+    data = request.get_json()
+    if not data:
+        return jsonify(error="Invalid request."), 400
+    src = data.get("src", "").strip()
+    dst = data.get("dst", "").strip()
+    provided_key = data.get("key")
+
+    if not src or not dst:
+        return jsonify(error="Both 'src' and 'dst' are required."), 400
+    if not provided_key:
+        return jsonify(error="API Key required."), 401
+    if not config.UPLOAD_API_KEY:
+        return jsonify(error="Server upload key not configured."), 501
+    if provided_key != config.UPLOAD_API_KEY:
+        return jsonify(error="Invalid API Key."), 401
+
+    success, message = file_service.move_item(src, dst)
+    if success:
+        return jsonify(status="success", message=message)
+    return jsonify(error=message), 400
+
+
 @api_bp.route("/delete-items", methods=["POST"])
 def delete_items():
     """Delete files or folders."""

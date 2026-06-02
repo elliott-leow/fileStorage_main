@@ -21,6 +21,9 @@ to run on a Raspberry Pi for 1–2 users.
 - **Filename Search**: Filter files by name with recursive option
 - **Folder Protection / Hidden Folders / Master Unlock / Shortcuts**
 - **File Upload & Deletion**: via the web UI or API
+- **AI-Navigable Version** (port 8001): point an AI agent at any folder link and
+  it gets a self-describing Markdown page — the folder's files with download URLs
+  plus an inline cheatsheet for download/search/upload/move/delete (see `AGENTS.md`)
 - **Catppuccin Theme**: self-hosted CSS — Mocha (dark, default) / Latte (light),
   no CDN, works offline
 

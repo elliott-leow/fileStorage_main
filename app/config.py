@@ -60,7 +60,8 @@ class Config:
     
     # Server settings
     HOST = os.getenv("HOST", "0.0.0.0")
-    PORT = int(os.getenv("PORT", 8000))
+    PORT = int(os.getenv("PORT", 8000))          # human (HTML) UI
+    AI_PORT = int(os.getenv("AI_PORT", 8001))    # AI-navigable (Markdown) version
     DEBUG = os.getenv("DEBUG", "true").lower() == "true"
     
     # Upload settings

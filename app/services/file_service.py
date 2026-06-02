@@ -213,6 +213,37 @@ class FileService:
             print(f"Error creating folder {new_folder_abs}: {e}")
             return False, f"OS Error: {e.strerror}", None
     
+    def move_item(self, src_rel: str, dst_rel: str) -> Tuple[bool, str]:
+        """
+        Move or rename a file/folder within the public root.
+
+        Args:
+            src_rel: source relative path
+            dst_rel: destination relative path
+
+        Returns:
+            (success, message)
+        """
+        src_abs = self.get_absolute_path(normalize_path(src_rel))
+        dst_abs = self.get_absolute_path(normalize_path(dst_rel))
+
+        if not self.is_safe_path(src_abs) or not self.is_safe_path(dst_abs):
+            return False, "Forbidden path."
+        if src_abs == self.public_dir:
+            return False, "Cannot move the root directory."
+        if not os.path.lexists(src_abs):
+            return False, "Source not found."
+        if os.path.exists(dst_abs):
+            return False, "Destination already exists."
+
+        try:
+            os.makedirs(os.path.dirname(dst_abs), exist_ok=True)
+            shutil.move(src_abs, dst_abs)
+            print(f"Moved: {src_abs} -> {dst_abs}")
+            return True, "Moved successfully."
+        except OSError as e:
+            return False, f"OS error: {e.strerror}"
+
     def delete_items(self, items: List[str]) -> Dict[str, Any]:
         """
         Delete files or folders.

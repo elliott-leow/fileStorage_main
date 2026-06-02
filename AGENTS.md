@@ -6,10 +6,28 @@ return clean JSON, so you never have to parse HTML.
 
 > **TL;DR for agents**
 > - List a folder: `GET /<path>?format=json`
-> - Semantic search: `GET /<path>?smart_query=<q>&format=json`
+> - Semantic search: `GET /<path>?smart_query=<q>&format=json`  (or `?q=<query>`)
 > - Download a file: `GET /<path>`  (raw bytes)
 > - Upload a file: `POST /upload/<path>` with header `X-Upload-Key` and the raw body
 > - Everything returns JSON when you send `?format=json` or `Accept: application/json`.
+
+## ⭐ The "single link" AI version (port 8001)
+
+The same server runs an **AI-navigable version on port 8001**. Fetch **any folder
+URL** there and you get back a **self-describing Markdown page**: it lists the
+folder's files with direct download URLs, links to subfolders, and an inline
+cheatsheet for download / search / upload / move / delete. Point an agent at one
+link and it has everything it needs.
+
+```
+http://<host>:8001/classes/BME221_BIOCHEM      # -> Markdown: contents + how to use them
+http://<host>:8001/?q=enzyme%20kinetics        # -> Markdown: ranked search hits + snippets
+```
+
+Downloads, uploads, and all `/api/...` calls work on port 8001 too, so the AI
+page can reference a single base URL. (Add `?ai=1` on port 8000 to preview the
+Markdown format.) The rest of this document is the full reference; the 8001 page
+is a per-folder, self-contained subset of it.
 
 ## Base URL
 
@@ -177,6 +195,7 @@ curl -X POST "$BASE/api/delete-items" -H "Content-Type: application/json" \
 
 | Endpoint | Body | Key |
 |----------|------|-----|
+| `POST /api/move` | `{src, dst, key}` | upload key |
 | `POST /api/set-path-protection` | `{path, password, key}` | upload key |
 | `POST /api/toggle-hidden` | `{path, key, hide}` | hidden key |
 | `POST /api/create-shortcut` | `{name, location, target, key}` | upload key |

@@ -29,40 +29,38 @@ const FileBrowser = {
      * Setup search form handling
      */
     setupSearchForm() {
-        const searchForm = document.getElementById('search-form');
-        const searchInput = document.getElementById('search');
-        const smartSearchInput = document.getElementById('smart-search');
-        const recursiveCheckbox = document.getElementById('recursive');
-        
-        if (!searchForm) return;
-        
-        searchForm.addEventListener('submit', (event) => {
+        const form = document.getElementById('search-form');
+        if (!form) return;
+        const input = document.getElementById('search-input');
+        const recursive = document.getElementById('recursive');
+        const recursiveOpt = form.querySelector('.recursive-opt');
+        const pills = form.querySelectorAll('.mode-pill');
+        const smartEnabled = form.dataset.smart === 'true';
+        let mode = form.dataset.mode || (smartEnabled ? 'smart' : 'name');
+
+        const applyMode = (m, focus) => {
+            mode = m;
+            pills.forEach((p) => p.classList.toggle('is-active', p.dataset.mode === m));
+            if (input) input.placeholder = m === 'name' ? 'Filter by name…' : 'Search by meaning…';
+            if (recursiveOpt) recursiveOpt.classList.toggle('hidden', m !== 'name');
+            if (focus && input) input.focus();
+        };
+        applyMode(mode, false);
+        pills.forEach((p) => p.addEventListener('click', () => applyMode(p.dataset.mode, true)));
+
+        form.addEventListener('submit', (event) => {
             event.preventDefault();
-            const submitter = event.submitter;
-            const isSmartSubmit = submitter?.name === 'submit_smart';
-            const isFilterSubmit = submitter?.name === 'submit_filter';
-            const filenameTerm = searchInput?.value.trim() || '';
-            const smartTerm = smartSearchInput?.value.trim() || '';
-            const isRecursive = recursiveCheckbox?.checked;
-            
+            const term = (input?.value || '').trim();
+            const base = window.location.pathname.replace(/\/+$/, '');
+            if (!term) { window.location.href = base + '/'; return; }
             const params = new URLSearchParams();
-            let navigationTarget = window.location.pathname;
-            
-            if (this.config.semanticSearchEnabled && smartTerm && (isSmartSubmit || !isFilterSubmit)) {
-                params.set('smart_query', smartTerm);
+            if (mode === 'smart' && smartEnabled) {
+                params.set('smart_query', term);
             } else {
-                if (filenameTerm) params.set('search', filenameTerm);
-                params.set('recursive', isRecursive ? 'true' : 'false');
+                params.set('search', term);
+                params.set('recursive', recursive?.checked ? 'true' : 'false');
             }
-            
-            if (!filenameTerm && !smartTerm && !isSmartSubmit && !isFilterSubmit) {
-                window.location.href = navigationTarget;
-                return;
-            }
-            
-            const paramString = params.toString();
-            const finalUrl = navigationTarget.replace(/\/$/, '') + '/' + (paramString ? '?' + paramString : '');
-            window.location.href = finalUrl;
+            window.location.href = base + '/?' + params.toString();
         });
     },
     
@@ -1244,7 +1242,7 @@ const FileBrowser = {
             const typing = tag === 'input' || tag === 'textarea' || event.target.isContentEditable;
 
             if (event.key === '/' && !typing) {
-                const s = document.getElementById('search');
+                const s = document.getElementById('search-input');
                 if (s) { event.preventDefault(); s.focus(); s.select(); }
                 return;
             }

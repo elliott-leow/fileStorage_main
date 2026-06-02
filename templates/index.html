@@ -14,6 +14,7 @@
             } catch (e) {}
         })();
     </script>
+    <link rel="preload" href="{{ url_for('static', filename='fonts/montserrat.woff2') }}" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
@@ -88,24 +89,23 @@
         </nav>
     </header>
 
-    <!-- Search -->
-    <form id="search-form" class="card search-card">
-        <div class="row wrap gap-2">
-            <input id="search" name="search" type="text" placeholder="Filter by name…" value="{{ search_query }}" class="input grow mono">
-            <label class="check text-sm shrink-0"><input id="recursive" name="recursive" type="checkbox" checked><span>recursive</span></label>
-            <button type="submit" name="submit_filter" value="filter" class="btn btn-ghost shrink-0">Filter</button>
-        </div>
+    <!-- Search (compact) -->
+    {% set init_mode = 'name' if (search_query and not smart_query) or not semantic_search_enabled else 'smart' %}
+    <form id="search-form" class="searchbar" data-mode="{{ init_mode }}" data-smart="{{ semantic_search_enabled | tojson }}">
         {% if semantic_search_enabled %}
-        <div class="row wrap gap-2 mt-2" style="border-top:1px solid var(--border); padding-top:14px;">
-            <input id="smart-search" name="smart_query" type="text" placeholder="Smart search by meaning…" value="{{ smart_query }}" class="input grow">
-            <button type="submit" name="submit_smart" value="smart" class="btn btn-primary shrink-0">✦ Smart Search</button>
+        <div class="search-modes" role="tablist">
+            <button type="button" class="mode-pill{% if init_mode == 'smart' %} is-active{% endif %}" data-mode="smart">Smart</button>
+            <button type="button" class="mode-pill{% if init_mode == 'name' %} is-active{% endif %}" data-mode="name">Name</button>
         </div>
-        {% else %}
-        <p class="text-sm muted mt-2" style="font-style:italic">Smart search unavailable (index not built).</p>
         {% endif %}
-        {% if search_query or smart_query %}
-        <div class="right mt-2"><a href="/{{ current_path }}" class="btn btn-ghost text-sm">Clear search</a></div>
-        {% endif %}
+        <input id="search-input" type="text" class="search-input" autocomplete="off"
+               value="{{ smart_query or search_query }}"
+               placeholder="{{ 'Filter by name…' if init_mode == 'name' else 'Search by meaning…' }}">
+        <label class="check recursive-opt{% if init_mode != 'name' %} hidden{% endif %}"><input id="recursive" type="checkbox" checked><span>recursive</span></label>
+        <button type="submit" class="search-go" aria-label="Search">
+            <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z"/></svg>
+        </button>
+        {% if search_query or smart_query %}<a href="/{{ current_path }}" class="search-clear" title="Clear search" aria-label="Clear search">×</a>{% endif %}
     </form>
 
     {% if permission_denied %}

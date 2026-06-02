@@ -233,7 +233,11 @@ def serve(path):
     
     # Handle directory/search
     if os.path.isdir(current_path_abs):
-        show_hidden_files = visibility_service.get_show_hidden_session()
+        # Master unlock always reveals hidden folders (keeps the two in sync).
+        show_hidden_files = (
+            visibility_service.get_show_hidden_session()
+            or auth_service.is_master_unlocked()
+        )
         current_display_path = relative_path_unquoted.strip("/")
         
         # Build title
@@ -537,6 +541,16 @@ def validate_master_key():
     except Exception as e:
         print(f"Error in /validate-master-key: {e}")
         return jsonify(status="error", message="Server error."), 500
+
+
+@main_bp.route("/lock", methods=["POST"])
+def lock():
+    """Re-lock the session: clear master unlock, folder access, and hidden view."""
+    session.pop("master_unlocked", None)
+    session.pop("authorized_paths", None)
+    session["show_hidden"] = False
+    session.modified = True
+    return jsonify(status="success", message="Locked.")
 
 
 @main_bp.route("/health")

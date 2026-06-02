@@ -24,6 +24,22 @@ const FileBrowser = {
         this.setupPreview();
         this.setupKeyboardShortcuts();
         this.setupAccessPrompt();
+        this.setupMasterLock();
+    },
+
+    /**
+     * Re-lock button: clears master unlock + folder access + hidden view.
+     */
+    setupMasterLock() {
+        const btn = document.getElementById('master-lock-btn');
+        if (!btn) return;
+        btn.addEventListener('click', async () => {
+            btn.disabled = true;
+            try {
+                await fetch('/lock', { method: 'POST' });
+            } catch (e) { /* ignore */ }
+            location.reload();
+        });
     },
 
     /**
@@ -1192,33 +1208,51 @@ const FileBrowser = {
         const buttons = document.querySelectorAll('.sort-btn');
         if (!list || !buttons.length) return;
 
-        const state = { key: null, dir: 1 };
-        const sortBy = (key) => {
-            if (state.key === key) {
-                state.dir *= -1;
-            } else {
-                state.key = key;
-                state.dir = key === 'name' ? 1 : -1; // size/date default newest/biggest first
-            }
-            const items = Array.from(list.querySelectorAll('.file-item'));
-            items.sort((a, b) => {
-                if (key === 'name') {
-                    return (a.dataset.name || '').localeCompare(b.dataset.name || '') * state.dir;
-                }
-                const av = parseFloat(a.dataset[key] || '0');
-                const bv = parseFloat(b.dataset[key] || '0');
-                return (av - bv) * state.dir;
-            });
-            items.forEach((it) => list.appendChild(it));
+        // Snapshot the server's original order so sorting can be turned OFF.
+        const original = Array.from(list.querySelectorAll('.file-item'));
+        // mode: 'off' -> 'desc' (high→low) -> 'asc' (low→high) -> 'off'
+        const state = { key: null, mode: 'off' };
+
+        const apply = () => {
             buttons.forEach((btn) => {
-                const active = btn.dataset.sort === key;
+                const active = btn.dataset.sort === state.key && state.mode !== 'off';
                 btn.classList.toggle('is-active', active);
                 const dirEl = btn.querySelector('.dir');
-                if (dirEl) dirEl.textContent = active ? (state.dir > 0 ? '↑' : '↓') : '';
+                if (dirEl) dirEl.textContent = active ? (state.mode === 'desc' ? '↓' : '↑') : '';
             });
+
+            let items;
+            if (state.mode === 'off' || !state.key) {
+                items = original.slice();             // restore original order
+            } else {
+                const key = state.key;
+                const sign = state.mode === 'desc' ? -1 : 1;
+                items = Array.from(list.querySelectorAll('.file-item')).sort((a, b) => {
+                    if (key === 'name') {
+                        return (a.dataset.name || '').localeCompare(b.dataset.name || '') * sign;
+                    }
+                    return (parseFloat(a.dataset[key] || '0') - parseFloat(b.dataset[key] || '0')) * sign;
+                });
+            }
+            items.forEach((it) => list.appendChild(it));
         };
 
-        buttons.forEach((btn) => btn.addEventListener('click', () => sortBy(btn.dataset.sort)));
+        const cycle = (key) => {
+            if (state.key !== key) {
+                state.key = key;
+                state.mode = 'desc';                  // first click: high → low
+            } else if (state.mode === 'desc') {
+                state.mode = 'asc';                   // second click: low → high
+            } else if (state.mode === 'asc') {
+                state.mode = 'off';                   // third click: disabled
+                state.key = null;
+            } else {
+                state.mode = 'desc';
+            }
+            apply();
+        };
+
+        buttons.forEach((btn) => btn.addEventListener('click', () => cycle(btn.dataset.sort)));
     },
 
     /**

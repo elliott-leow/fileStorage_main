@@ -44,7 +44,7 @@ class Config:
 
     # Hybrid search tuning
     SEARCH_TOP_N = int(os.getenv("SEARCH_TOP_N", 15))            # results returned
-    SEARCH_RERANK_CANDIDATES = int(os.getenv("SEARCH_RERANK_CANDIDATES", 30))  # before rerank
+    SEARCH_RERANK_CANDIDATES = int(os.getenv("SEARCH_RERANK_CANDIDATES", 12))  # rerank top-N (query latency)
     SEARCH_W_RERANK = float(os.getenv("SEARCH_W_RERANK", 0.70))      # cross-encoder weight
     SEARCH_W_POPULARITY = float(os.getenv("SEARCH_W_POPULARITY", 0.15))  # access freq/recency
     SEARCH_W_TRAJECTORY = float(os.getenv("SEARCH_W_TRAJECTORY", 0.15))  # P(file | path)

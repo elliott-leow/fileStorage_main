@@ -243,6 +243,15 @@ class SearchService:
             self.reranker = False
             return False
 
+    def warmup(self) -> None:
+        """Pre-load the embedding + rerank models so the first query is fast."""
+        try:
+            self._ensure_model()
+            self._ensure_reranker()
+            print("Search models warmed up.")
+        except Exception as e:
+            print(f"Search warmup skipped: {e}")
+
     def encode_texts(self, texts: List[str]) -> "np.ndarray":
         """L2-normalized embeddings for passages/names (used by nav model too)."""
         if not self._ensure_model() or not texts:

@@ -48,7 +48,12 @@ def create_app(config_name: str = None) -> Flask:
     
     # Initialize services
     _init_services(app, config)
-    
+
+    # Pre-warm the search models in the background so the first query is fast.
+    if app.search_service.is_available:
+        import threading
+        threading.Thread(target=app.search_service.warmup, daemon=True).start()
+
     # Register blueprints
     register_blueprints(app)
 

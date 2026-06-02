@@ -37,11 +37,13 @@ def format_file_info(
         
         rel_path_normalized = normalize_path_display(rel_path)
         rel_path_encoded = urllib.parse.quote(rel_path_normalized)
-        
+
         return {
             "is_dir": is_dir,
             "size": size,
+            "size_bytes": -1 if is_dir else stat_result.st_size,
             "mtime": mtime,
+            "mtime_ts": stat_result.st_mtime,
             "rel_path": rel_path_normalized,
             "rel_path_encoded": rel_path_encoded,
             "is_protected": is_protected,
@@ -56,7 +58,9 @@ def format_file_info(
         return {
             "is_dir": False,
             "size": "N/A",
+            "size_bytes": 0,
             "mtime": "N/A",
+            "mtime_ts": 0,
             "rel_path": rel_path_normalized,
             "rel_path_encoded": urllib.parse.quote(rel_path_normalized),
             "is_protected": False,

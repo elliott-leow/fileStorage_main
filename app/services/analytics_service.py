@@ -272,3 +272,15 @@ class AnalyticsService:
             ),
             "sessions": one("SELECT COUNT(*) FROM sessions"),
         }
+
+    def summary(self) -> Dict[str, Any]:
+        """Everything the dashboard needs, in one call."""
+        return {
+            "totals": self.totals(),
+            "top_files": self.top_files(10),
+            "top_queries": self.top_queries(10),
+            "top_folders": self.top_folders(10),
+            "searches_over_time": self.searches_over_time(30),
+            "folder_transitions": self.folder_transitions(10),
+            "recent_activity": self.recent_activity(20),
+        }

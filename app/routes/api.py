@@ -4,11 +4,22 @@ API routes for programmatic access.
 import io
 import os
 import zipfile
-from flask import Blueprint, request, jsonify, current_app, Response
+from flask import Blueprint, request, jsonify, current_app, Response, session
 
 from ..utils.path_utils import normalize_path
 
 api_bp = Blueprint("api", __name__)
+
+
+@api_bp.route("/analytics/summary", methods=["GET"])
+def analytics_summary():
+    """Aggregated analytics for the dashboard (same gate as /dashboard)."""
+    auth_service = current_app.auth_service
+    analytics_service = current_app.analytics_service
+    authorized = bool(session.get("dashboard_ok")) or auth_service.is_master_unlocked()
+    if not authorized:
+        return jsonify(error="Unauthorized."), 401
+    return jsonify(analytics_service.summary())
 
 
 @api_bp.route("/list-dirs", methods=["POST"])

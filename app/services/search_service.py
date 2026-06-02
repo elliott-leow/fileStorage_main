@@ -1,53 +1,61 @@
 """
-Semantic search service using sentence transformers.
+Hybrid semantic search with cross-encoder reranking.
+
+Pipeline:  query -> (bge embeddings + BM25) -> reciprocal rank fusion
+           -> cross-encoder rerank -> blend popularity + P(file|path) -> snippets
+
+Models are lazy-loaded on first use so startup stays fast and RAM stays free
+until search is actually used. Embeddings are L2-normalized, so cosine
+similarity is a single numpy matmul (no scikit-learn).
 """
+import html
+import math
 import os
 import pickle
+import re
 import time
-from typing import Dict, List, Optional, Any
+from typing import Any, Callable, Dict, List, Optional
 
-# Core dependencies
 try:
     import numpy as np
     NUMPY_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover
     NUMPY_AVAILABLE = False
     np = None
 
-# Optional imports - gracefully handle if not available
+from .bm25 import BM25, tokenize
+from .fusion import rrf
+
+# ----- optional heavy deps (sentence-transformers / torch / pypdf) ----------
+
 SEARCH_DEPS_AVAILABLE = False
 SentenceTransformer = None
+CrossEncoder = None
 torch = None
-cosine_similarity = None
 
-def _try_import_search_deps():
-    """Attempt to import search dependencies."""
-    global SEARCH_DEPS_AVAILABLE, SentenceTransformer, torch, cosine_similarity
+BGE_QUERY_INSTRUCTION = "Represent this sentence for searching relevant passages: "
+
+
+def _try_import_search_deps() -> bool:
+    global SEARCH_DEPS_AVAILABLE, SentenceTransformer, CrossEncoder, torch
     try:
-        from sentence_transformers import SentenceTransformer as ST
+        from sentence_transformers import SentenceTransformer as ST, CrossEncoder as CE
         import torch as t
-        from sklearn.metrics.pairwise import cosine_similarity as cs
         SentenceTransformer = ST
+        CrossEncoder = CE
         torch = t
-        cosine_similarity = cs
         SEARCH_DEPS_AVAILABLE = True
         return True
-    except ImportError as e:
-        print(f"Warning: Search dependencies not available ({e}). Semantic search disabled.")
-        return False
     except Exception as e:
-        print(f"Warning: Error loading search dependencies ({e}). Semantic search disabled.")
+        print(f"Warning: search dependencies unavailable ({e}). Semantic search disabled.")
         return False
 
-# Try to import on module load (deferred to avoid import-time errors)
-# We'll try again in SearchService.__init__ if needed
 
-# PDF support
 PDF_SUPPORT = False
 pypdf = None
 
-def _try_import_pdf():
-    """Attempt to import PDF support."""
+
+def _try_import_pdf() -> bool:
     global PDF_SUPPORT, pypdf
     try:
         import pypdf as p
@@ -59,310 +67,350 @@ def _try_import_pdf():
         return False
 
 
+# ----------------------------------------------------------------- snippets
+
+def make_snippet(text: str, query: str, window: int = 40) -> str:
+    """HTML-safe excerpt around the first query-term hit, terms <mark>-highlighted."""
+    words = " ".join(text.split()).split(" ")
+    qset = {t for t in tokenize(query) if len(t) >= 2}
+    start = 0
+    for i, w in enumerate(words):
+        toks = tokenize(w)
+        if toks and toks[0] in qset:
+            start = max(0, i - window // 2)
+            break
+    snippet = html.escape(" ".join(words[start:start + window]))
+    if start > 0:
+        snippet = "… " + snippet
+    if start + window < len(words):
+        snippet = snippet + " …"
+    for t in sorted(qset, key=len, reverse=True):
+        snippet = re.sub(r"(?i)\b(" + re.escape(t) + r")\b", r"<mark>\1</mark>", snippet)
+    return snippet
+
+
+def _minmax(d: Dict[str, float]) -> Dict[str, float]:
+    if not d:
+        return {}
+    lo, hi = min(d.values()), max(d.values())
+    if hi - lo < 1e-9:
+        return {k: 0.0 for k in d}
+    return {k: (v - lo) / (hi - lo) for k, v in d.items()}
+
+
 class SearchService:
-    """Handles semantic search functionality."""
-    
+    """Hybrid + reranked semantic search over indexed file content."""
+
     def __init__(
-        self, 
+        self,
         model_name: str,
         cache_dir: str,
         index_file: str,
         supported_extensions: List[str],
         max_chunk_size: int = 500,
-        max_file_size_mb: int = 50
+        chunk_overlap: int = 80,
+        max_file_size_mb: int = 50,
+        rerank_model_name: Optional[str] = None,
+        top_n: int = 15,
+        rerank_candidates: int = 30,
+        w_rerank: float = 0.70,
+        w_pop: float = 0.15,
+        w_traj: float = 0.15,
     ):
-        """
-        Initialize the search service.
-        
-        Args:
-            model_name: Name of the sentence transformer model
-            cache_dir: Directory for caching
-            index_file: Name of the index file
-            supported_extensions: List of supported file extensions
-            max_chunk_size: Maximum words per chunk
-            max_file_size_mb: Maximum file size to process in MB
-        """
         self.model_name = model_name
+        self.rerank_model_name = rerank_model_name
         self.cache_dir = cache_dir
         self.index_file = index_file
         self.supported_extensions = supported_extensions
         self.max_chunk_size = max_chunk_size
+        self.chunk_overlap = chunk_overlap
         self.max_file_size_mb = max_file_size_mb
-        
-        self.model = None
+        self.top_n = top_n
+        self.rerank_candidates = rerank_candidates
+        self.w_rerank, self.w_pop, self.w_traj = w_rerank, w_pop, w_traj
+
+        self.model = None        # lazy
+        self.reranker = None     # lazy; False once a load attempt failed
         self.index_data: Optional[Dict[str, Any]] = None
-        self.model_loaded = False
-        
-        # Ensure cache directory exists
+        self._bm25: Optional[BM25] = None
+        self.deps_ok = False
+
         os.makedirs(cache_dir, exist_ok=True)
         self.index_file_path = os.path.join(cache_dir, index_file)
-        
-        # Try to import dependencies and load model
+
         if _try_import_search_deps():
             _try_import_pdf()
-            self._load_model()
+            self.deps_ok = True
             self._load_index()
-    
+
+    # ------------------------------------------------------------- status
+
     @property
     def is_available(self) -> bool:
-        """Check if search functionality is available."""
-        return self.model_loaded
-    
+        """Search dependencies are importable (model loads lazily)."""
+        return self.deps_ok
+
     @property
     def is_index_ready(self) -> bool:
-        """Check if the index is loaded and ready."""
-        return self.index_data is not None and self.index_data.get("embeddings") is not None
-    
-    def _load_model(self) -> None:
-        """Load the sentence transformer model."""
-        if not SEARCH_DEPS_AVAILABLE:
-            return
-        
-        print(f"Loading sentence transformer model: {self.model_name}...")
+        return (
+            self.index_data is not None
+            and self.index_data.get("embeddings") is not None
+            and self.index_data["embeddings"].shape[0] > 0
+        )
+
+    # -------------------------------------------------------- model loading
+
+    def _ensure_model(self) -> bool:
+        if self.model is not None:
+            return True
+        if not self.deps_ok:
+            return False
+        device = "cuda" if (torch and torch.cuda.is_available()) else "cpu"
         try:
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            print(f"Loading embedding model {self.model_name} on {device}...")
             self.model = SentenceTransformer(self.model_name, device=device)
-            self.model_loaded = True
-            print(f"Model loaded successfully on device: {device}")
+            return True
         except Exception as e:
-            print(f"Error loading Sentence Transformer model: {e}")
-            self.model_loaded = False
-    
+            print(f"Error loading embedding model: {e}")
+            return False
+
+    def _ensure_reranker(self) -> bool:
+        if self.reranker is not None:
+            return bool(self.reranker)
+        if not self.deps_ok or not self.rerank_model_name:
+            self.reranker = False
+            return False
+        try:
+            print(f"Loading reranker {self.rerank_model_name}...")
+            self.reranker = CrossEncoder(self.rerank_model_name)
+            return True
+        except Exception as e:
+            print(f"Warning: reranker unavailable ({e}); skipping rerank.")
+            self.reranker = False
+            return False
+
+    def encode_texts(self, texts: List[str]) -> "np.ndarray":
+        """L2-normalized embeddings for passages/names (used by nav model too)."""
+        if not self._ensure_model() or not texts:
+            return np.zeros((0, 384), dtype=np.float32)
+        return self.model.encode(
+            texts, normalize_embeddings=True, convert_to_numpy=True,
+            batch_size=64, show_progress_bar=False,
+        ).astype(np.float32)
+
+    def encode_query(self, query: str) -> Optional["np.ndarray"]:
+        if not self._ensure_model():
+            return None
+        vec = self.model.encode(
+            BGE_QUERY_INSTRUCTION + query,
+            normalize_embeddings=True, convert_to_numpy=True, show_progress_bar=False,
+        )
+        return np.asarray(vec, dtype=np.float32)
+
+    # ------------------------------------------------------------- indexing
+
     def _load_index(self) -> None:
-        """Load the semantic index from file."""
-        if not self.model_loaded:
+        if not os.path.exists(self.index_file_path):
+            print("Semantic index not found. POST /rebuild-index to build.")
             return
-        
-        if os.path.exists(self.index_file_path):
-            try:
-                with open(self.index_file_path, "rb") as f:
-                    print(f"Loading semantic index from {self.index_file_path}...")
-                    index_data = pickle.load(f)
-                    
-                    if self._validate_index(index_data):
-                        self.index_data = index_data
-                        print(f"Loaded index with {index_data['embeddings'].shape[0]} embeddings.")
-                    else:
-                        print("Invalid index file. Rebuilding recommended.")
-            except Exception as e:
-                print(f"Error loading index file: {e}")
-        else:
-            print("Semantic index file not found.")
-    
-    def _validate_index(self, index_data: Dict) -> bool:
-        """Validate index data structure and dimensions."""
-        if not isinstance(index_data, dict):
+        try:
+            with open(self.index_file_path, "rb") as f:
+                data = pickle.load(f)
+            if not self._validate_index(data):
+                print("Index invalid or from a different model; rebuild recommended.")
+                return
+            self.index_data = data
+            self._build_bm25()
+            print(f"Loaded index: {data['embeddings'].shape[0]} chunks "
+                  f"from {len(set(m['path'] for m in data['metadata']))} files.")
+        except Exception as e:
+            print(f"Error loading index: {e}")
+
+    def _validate_index(self, data: Dict) -> bool:
+        if not isinstance(data, dict) or data.get("version") != 2:
             return False
-        if "embeddings" not in index_data or "metadata" not in index_data:
+        if "embeddings" not in data or "metadata" not in data:
             return False
-        if not isinstance(index_data["embeddings"], np.ndarray):
+        if not isinstance(data["embeddings"], np.ndarray):
             return False
-        
-        # Check embedding dimensions match model
-        if (index_data["embeddings"].shape[0] > 0 and 
-            index_data["embeddings"].shape[1] != self.model.get_sentence_embedding_dimension()):
-            print("Warning: Index embedding dimensions don't match model.")
+        if data.get("model") != self.model_name:
             return False
-        
         return True
-    
+
+    def _build_bm25(self) -> None:
+        if not self.index_data:
+            self._bm25 = None
+            return
+        corpus = [tokenize(m.get("text", "")) for m in self.index_data["metadata"]]
+        self._bm25 = BM25(corpus)
+
     def extract_text_from_file(self, filepath: str) -> Optional[str]:
-        """
-        Extract text content from supported file types.
-        
-        Args:
-            filepath: Path to the file
-            
-        Returns:
-            Extracted text or None
-        """
         _, ext = os.path.splitext(filepath)
         ext = ext.lower()
-        
-        # Check file size
         try:
             if os.path.getsize(filepath) > self.max_file_size_mb * 1024 * 1024:
-                print(f"Skipping large file (>{self.max_file_size_mb}MB): {filepath}")
                 return None
         except OSError:
             return None
-        
         try:
-            if ext == ".txt":
+            if ext in (".txt", ".md", ".markdown"):
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                     return f.read()
-            elif ext == ".pdf" and PDF_SUPPORT and pypdf is not None:
+            if ext == ".pdf" and PDF_SUPPORT:
                 text = ""
                 try:
                     reader = pypdf.PdfReader(filepath)
                     for page in reader.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text + "\n"
+                        t = page.extract_text()
+                        if t:
+                            text += t + "\n"
                 except Exception as e:
-                    print(f"Warning: Could not read PDF {filepath}: {e}")
+                    print(f"Warning: could not read PDF {filepath}: {e}")
                     return None
                 return text
-            else:
-                return None
         except Exception as e:
-            print(f"Error extracting text from {filepath}: {e}")
-            return None
-    
+            print(f"Error extracting {filepath}: {e}")
+        return None
+
     def _chunk_text(self, text: str) -> List[str]:
-        """Split text into chunks of max_chunk_size words."""
         words = text.split()
-        chunks = []
-        current_chunk = []
-        word_count = 0
-        
-        for word in words:
-            current_chunk.append(word)
-            word_count += 1
-            if word_count >= self.max_chunk_size:
-                chunks.append(" ".join(current_chunk))
-                current_chunk = []
-                word_count = 0
-        
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-        
-        return chunks
-    
+        if not words:
+            return []
+        stride = max(1, self.max_chunk_size - self.chunk_overlap)
+        return [
+            " ".join(words[i:i + self.max_chunk_size])
+            for i in range(0, len(words), stride)
+        ]
+
     def build_index(self, public_dir: str) -> Optional[Dict[str, Any]]:
-        """
-        Build the semantic search index.
-        
-        Args:
-            public_dir: The public directory to index
-            
-        Returns:
-            Index data or None on failure
-        """
-        if not self.model_loaded:
-            print("Model not loaded. Cannot build index.")
+        if not self._ensure_model():
+            print("Model not loaded; cannot build index.")
             return None
-        
-        print("Starting semantic index build...")
-        start_time = time.time()
-        
-        index_data = {"embeddings": [], "metadata": []}
-        files_processed = 0
-        chunks_processed = 0
-        
+        print("Building semantic index...")
+        start = time.time()
+        texts: List[str] = []
+        metadata: List[Dict[str, Any]] = []
+
         for root, _, files in os.walk(public_dir):
             for filename in files:
                 _, ext = os.path.splitext(filename)
                 if ext.lower() not in self.supported_extensions:
                     continue
-                
                 abs_path = os.path.join(root, filename)
-                if not abs_path.startswith(public_dir):
+                rel_path = os.path.relpath(abs_path, public_dir).replace(os.sep, "/")
+                content = self.extract_text_from_file(abs_path)
+                if not content:
                     continue
-                
-                rel_path = os.path.relpath(abs_path, public_dir)
-                print(f"  Processing: {rel_path}")
-                files_processed += 1
-                
-                text = self.extract_text_from_file(abs_path)
-                if not text:
-                    continue
-                
-                chunks = self._chunk_text(text)
-                if not chunks:
-                    continue
-                
-                try:
-                    chunk_embeddings = self.model.encode(
-                        chunks, 
-                        convert_to_tensor=True, 
-                        show_progress_bar=False
-                    )
-                    
-                    index_data["embeddings"].append(chunk_embeddings.cpu().numpy())
-                    for i in range(len(chunks)):
-                        index_data["metadata"].append({
-                            "path": rel_path, 
-                            "chunk_index": i
-                        })
-                        chunks_processed += 1
-                except Exception as e:
-                    print(f"Error encoding chunks for {rel_path}: {e}")
-        
-        # Finalize index
-        if not index_data["embeddings"]:
-            print("No embeddings generated. Index is empty.")
-            if np is not None:
-                index_data["embeddings"] = np.array([]).reshape(
-                    0, self.model.get_sentence_embedding_dimension()
-                )
-            else:
-                index_data["embeddings"] = []
+                for i, chunk in enumerate(self._chunk_text(content)):
+                    texts.append(chunk)
+                    metadata.append({"path": rel_path, "chunk_index": i, "text": chunk})
+
+        dim = self.model.get_sentence_embedding_dimension()
+        if texts:
+            embeddings = self.encode_texts(texts)
         else:
-            if np is not None:
-                index_data["embeddings"] = np.concatenate(index_data["embeddings"], axis=0)
-        
-        # Save index
+            embeddings = np.zeros((0, dim), dtype=np.float32)
+
+        data = {"version": 2, "model": self.model_name, "dim": dim,
+                "embeddings": embeddings, "metadata": metadata}
         try:
             with open(self.index_file_path, "wb") as f:
-                pickle.dump(index_data, f)
-            
-            end_time = time.time()
-            print(f"Semantic index built and saved to {self.index_file_path}")
-            print(f"Processed {files_processed} files, {chunks_processed} text chunks.")
-            print(f"Index build took {end_time - start_time:.2f} seconds.")
-            
-            self.index_data = index_data
-            return index_data
+                pickle.dump(data, f)
         except Exception as e:
-            print(f"Error saving index file: {e}")
+            print(f"Error saving index: {e}")
             return None
-    
-    def search(self, query: str, top_n: int = 15) -> List[Dict[str, Any]]:
-        """
-        Perform semantic search.
-        
-        Args:
-            query: Search query
-            top_n: Number of results to return
-            
-        Returns:
-            List of search results with path and score
-        """
-        if not self.model_loaded:
-            print("Model not loaded. Cannot search.")
+
+        self.index_data = data
+        self._build_bm25()
+        print(f"Indexed {len(set(m['path'] for m in metadata))} files / "
+              f"{len(texts)} chunks in {time.time() - start:.1f}s.")
+        return data
+
+    # --------------------------------------------------------------- search
+
+    def _popularity_scores(self, paths, popularity, now) -> Dict[str, float]:
+        if not popularity:
+            return {p: 0.0 for p in paths}
+        raw = {}
+        for p in paths:
+            info = popularity.get(p)
+            if not info:
+                raw[p] = 0.0
+                continue
+            recency = math.exp(-(now - info["last_ts"]) / (14 * 86400)) if info.get("last_ts") else 0.0
+            raw[p] = math.log1p(info.get("count", 0)) * (1 + recency)
+        return _minmax(raw)
+
+    def search(
+        self,
+        query: str,
+        top_n: Optional[int] = None,
+        popularity: Optional[Dict[str, Dict[str, Any]]] = None,
+        prior_fn: Optional[Callable[[List[str]], Dict[str, float]]] = None,
+        now: Optional[float] = None,
+    ) -> List[Dict[str, Any]]:
+        """Run the full hybrid+rerank pipeline and return ranked files."""
+        if not self.is_index_ready or self._bm25 is None:
             return []
-        
-        if not self.is_index_ready or self.index_data["embeddings"].shape[0] == 0:
-            print("Index not ready. Cannot search.")
+        qvec = self.encode_query(query)
+        if qvec is None:
             return []
-        
-        try:
-            query_embedding = self.model.encode(query, convert_to_tensor=True)
-            query_embedding_np = query_embedding.cpu().numpy().reshape(1, -1)
-            
-            sims = cosine_similarity(query_embedding_np, self.index_data["embeddings"])[0]
-            top_indices = np.argsort(sims)[::-1][:top_n]
-            
-            results = []
-            seen_paths = set()
-            
-            for idx in top_indices:
-                score = float(sims[idx])
-                if score < 0.05:  # Relevance threshold
-                    continue
-                
-                metadata = self.index_data["metadata"][idx]
-                rel_path = metadata["path"]
-                
-                if rel_path not in seen_paths:
-                    results.append({"path": rel_path, "score": score})
-                    seen_paths.add(rel_path)
-            
-            results.sort(key=lambda x: x["score"], reverse=True)
-            return results
-            
-        except Exception as e:
-            print(f"Error during semantic search for '{query}': {e}")
+        top_n = top_n or self.top_n
+        now = time.time() if now is None else now
+
+        embeddings = self.index_data["embeddings"]
+        metadata = self.index_data["metadata"]
+
+        # 1. semantic + lexical rankings
+        sem_scores = embeddings @ qvec
+        bm_scores = self._bm25.get_scores(tokenize(query))
+        pool = max(self.rerank_candidates * 2, 50)
+        sem_rank = list(np.argsort(sem_scores)[::-1][:pool].astype(int))
+        bm_rank = list(np.argsort(bm_scores)[::-1][:pool].astype(int))
+
+        # 2. fuse, keep the best candidate chunks
+        fused = rrf([sem_rank, bm_rank])
+        candidates = [(idx, sc) for idx, sc in fused[: self.rerank_candidates]]
+        if not candidates:
             return []
 
+        # 3. rerank (or fall back to fused scores)
+        if self._ensure_reranker():
+            pairs = [(query, metadata[i]["text"][:1024]) for i, _ in candidates]
+            rscores = self.reranker.predict(pairs)
+            scored = list(zip([i for i, _ in candidates], [float(s) for s in rscores]))
+        else:
+            scored = candidates
+
+        # 4. collapse to best chunk per file
+        best: Dict[str, Dict[str, Any]] = {}
+        for chunk_idx, score in scored:
+            path = metadata[chunk_idx]["path"]
+            if path not in best or score > best[path]["rerank"]:
+                best[path] = {"chunk": int(chunk_idx), "rerank": float(score)}
+        paths = list(best.keys())
+
+        # 5. blend rerank + popularity + trajectory prior
+        rr_norm = _minmax({p: best[p]["rerank"] for p in paths})
+        pop_norm = self._popularity_scores(paths, popularity, now)
+        traj = prior_fn(paths) if prior_fn else {}
+
+        results = []
+        for p in paths:
+            final = (
+                self.w_rerank * rr_norm.get(p, 0.0)
+                + self.w_pop * pop_norm.get(p, 0.0)
+                + self.w_traj * traj.get(p, 0.0)
+            )
+            results.append({
+                "path": p,
+                "score": final,
+                "snippet": make_snippet(metadata[best[p]["chunk"]]["text"], query),
+                "components": {
+                    "rerank": rr_norm.get(p, 0.0),
+                    "popularity": pop_norm.get(p, 0.0),
+                    "trajectory": traj.get(p, 0.0),
+                },
+            })
+        results.sort(key=lambda r: r["score"], reverse=True)
+        return results[:top_n]

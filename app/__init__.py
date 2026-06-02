@@ -10,6 +10,8 @@ from .services.visibility_service import VisibilityService
 from .services.file_service import FileService
 from .services.search_service import SearchService
 from .services.shortcut_service import ShortcutService
+from .services.analytics_service import AnalyticsService
+from .services.navigation_service import NavigationService
 from .routes import register_blueprints
 
 
@@ -77,14 +79,34 @@ def _init_services(app: Flask, config: Config) -> None:
     # Shortcut service
     app.shortcut_service = ShortcutService(config.SHORTCUTS_CONFIG_FILE)
 
-    # Search service
+    # Analytics service (activity logging + ranking signals)
+    app.analytics_service = AnalyticsService(
+        db_path=config.ANALYTICS_DB_FILE,
+        enabled=config.ANALYTICS_ENABLED,
+        idle_timeout_min=config.SESSION_IDLE_TIMEOUT_MIN,
+    )
+
+    # Search service (hybrid + rerank, lazy-loaded models)
     app.search_service = SearchService(
         model_name=config.SEMANTIC_MODEL_NAME,
         cache_dir=config.CACHE_DIR,
         index_file=config.SEMANTIC_INDEX_FILE,
         supported_extensions=config.SUPPORTED_EXTENSIONS,
         max_chunk_size=config.MAX_CHUNK_SIZE,
-        max_file_size_mb=config.MAX_FILE_SIZE_MB
+        chunk_overlap=config.CHUNK_OVERLAP,
+        max_file_size_mb=config.MAX_FILE_SIZE_MB,
+        rerank_model_name=config.SEARCH_RERANK_MODEL,
+        top_n=config.SEARCH_TOP_N,
+        rerank_candidates=config.SEARCH_RERANK_CANDIDATES,
+        w_rerank=config.SEARCH_W_RERANK,
+        w_pop=config.SEARCH_W_POPULARITY,
+        w_traj=config.SEARCH_W_TRAJECTORY,
+    )
+
+    # Navigation model: P(file | path), reusing the search encoder for names
+    app.navigation_service = NavigationService(
+        analytics_service=app.analytics_service,
+        encode_fn=app.search_service.encode_texts,
     )
 
 
@@ -158,6 +180,7 @@ def _log_startup_info(app: Flask, config: Config) -> None:
     
     print(f"Delete Key Configured: {config.DELETE_KEY_CONFIGURED}")
     print(f"Hidden Key Configured: {config.HIDDEN_KEY_CONFIGURED}")
+    print(f"Analytics Enabled: {app.analytics_service.enabled} (db: {config.ANALYTICS_DB_FILE})")
     print(f"Max Upload Size: {config.MAX_UPLOAD_SIZE_GB} GB")
     
     if not config.is_secret_key_secure():

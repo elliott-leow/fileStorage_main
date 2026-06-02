@@ -2,23 +2,46 @@
 Main routes for file browsing and serving.
 """
 import os
-import urllib.parse
+import uuid
 import shutil
 from datetime import datetime
 
 from flask import (
-    Blueprint, render_template, send_from_directory, 
+    Blueprint, render_template, send_from_directory, session,
     abort, request, jsonify, current_app
 )
 import humanize
 
 from ..utils.path_utils import (
-    normalize_path, normalize_path_display, 
+    normalize_path, normalize_path_display,
     url_decode_path, url_encode_path
 )
 from ..utils.file_utils import format_file_info
 
 main_bp = Blueprint("main", __name__)
+
+
+def _client_id() -> str:
+    """Stable per-browser id used to group analytics into sessions."""
+    cid = session.get("cid")
+    if not cid:
+        cid = uuid.uuid4().hex
+        session["cid"] = cid
+        session.modified = True
+    return cid
+
+
+def _build_breadcrumbs(display_path: str):
+    """[{name, url}] from Home down to the current folder."""
+    crumbs = [{"name": "Home", "url": "/"}]
+    if not display_path:
+        return crumbs
+    parts = display_path.strip("/").split("/")
+    acc = ""
+    for part in parts:
+        acc = f"{acc}/{part}" if acc else part
+        crumbs.append({"name": part, "url": "/" + url_encode_path(acc)})
+    return crumbs
 
 
 @main_bp.route("/", defaults={"path": ""})
@@ -31,8 +54,10 @@ def serve(path):
     visibility_service = current_app.visibility_service
     search_service = current_app.search_service
     shortcut_service = current_app.shortcut_service
+    analytics_service = current_app.analytics_service
+    navigation_service = current_app.navigation_service
     config = current_app.config_obj
-    
+
     # Get query parameters
     filename_search_query = request.args.get("search", "").strip()
     smart_query = request.args.get("smart_query", "").strip()
@@ -74,7 +99,15 @@ def serve(path):
     
     # Handle file request
     if os.path.isfile(current_path_abs):
-        return send_from_directory(config.PUBLIC_DIR, path)
+        is_preview = request.args.get("preview") == "1"
+        analytics_service.log(
+            "preview" if is_preview else "open",
+            path=norm_current_path, client=_client_id(),
+        )
+        return send_from_directory(
+            config.PUBLIC_DIR, path,
+            as_attachment=request.args.get("download") == "1",
+        )
     
     # Handle directory/search
     if os.path.isdir(current_path_abs):
@@ -103,15 +136,22 @@ def serve(path):
         if not permission_denied:
             if smart_query:
                 entries = _handle_smart_search(
-                    smart_query, 
-                    file_service, 
+                    smart_query,
+                    file_service,
                     search_service,
+                    navigation_service,
+                    analytics_service,
+                    _client_id(),
                     show_hidden_files
                 )
                 if not search_service.is_available:
                     title += " (Semantic Model Error)"
                 elif not search_service.is_index_ready:
                     title += " (Semantic Index Not Ready)"
+                analytics_service.log(
+                    "search", query=smart_query, client=_client_id(),
+                    meta={"mode": "smart", "results": len(entries)},
+                )
             elif filename_search_query:
                 entries = _handle_filename_search(
                     filename_search_query,
@@ -120,9 +160,16 @@ def serve(path):
                     file_service,
                     show_hidden_files
                 )
+                analytics_service.log(
+                    "search", query=filename_search_query, client=_client_id(),
+                    meta={"mode": "filename", "results": len(entries)},
+                )
             else:
+                analytics_service.log(
+                    "navigate", path=norm_current_path, client=_client_id()
+                )
                 dir_entries, success = file_service.list_directory(
-                    norm_current_path, 
+                    norm_current_path,
                     show_hidden=show_hidden_files
                 )
                 if success:
@@ -156,11 +203,12 @@ def serve(path):
             )
         
         current_path_display = normalize_path_display(norm_current_path)
-        
+
         return render_template(
             "index.html",
             title=title,
             entries=sorted_entries,
+            breadcrumbs=_build_breadcrumbs(current_path_display),
             show_parent=show_parent,
             parent_url=parent_url,
             search_query=filename_search_query,
@@ -181,44 +229,50 @@ def serve(path):
     abort(500)
 
 
-def _handle_smart_search(query, file_service, search_service, show_hidden):
-    """Handle smart search combining semantic and filename search."""
+def _handle_smart_search(query, file_service, search_service, navigation_service,
+                         analytics_service, client_id, show_hidden):
+    """Smart search: hybrid+rerank semantic results merged with filename matches."""
     temp_entries = {}
-    
-    # Semantic search
+
+    # Semantic search (with popularity + trajectory personalization)
     semantic_results = {}
+    snippets = {}
     if search_service.is_available and search_service.is_index_ready:
-        raw_results = search_service.search(query, top_n=50)
-        for res in raw_results:
+        popularity = analytics_service.file_popularity()
+        trajectory = analytics_service.current_trajectory(client_id)
+        prior_fn = lambda paths: navigation_service.file_priors(trajectory, paths)
+        for res in search_service.search(query, popularity=popularity, prior_fn=prior_fn):
             semantic_results[res["path"]] = res["score"]
-    
+            snippets[res["path"]] = res.get("snippet")
+
     # Filename search
     filename_results = file_service.find_by_name(
-        query, 
-        start_path="", 
+        query,
+        start_path="",
         recursive=True,
         show_hidden=show_hidden
     )
     filename_map = {r["rel_path"]: r for r in filename_results}
-    
+
     # Combine results - semantic first
     for rel_path, score in semantic_results.items():
         abs_path = file_service.get_absolute_path(rel_path)
         if not os.path.exists(abs_path):
             continue
-        
+
         if not show_hidden and file_service.visibility_service.is_hidden(rel_path):
             continue
-        
+
         is_protected = file_service.auth_service.is_path_protected(rel_path)
         info = format_file_info(abs_path, rel_path, is_protected=is_protected)
-        
+
         if not info["error"]:
             info["score"] = f"{score:.2f}"
+            info["snippet"] = snippets.get(rel_path)
             info["display_name"] = os.path.basename(rel_path)
             info["matched_name"] = rel_path in filename_map
             temp_entries[info["rel_path"]] = info
-    
+
     # Add filename-only results
     for rel_path, item_data in filename_map.items():
         if rel_path not in temp_entries:
@@ -354,5 +408,45 @@ def health_check():
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+def dashboard_key_valid(auth_service, config, key: str) -> bool:
+    """Dashboard accepts the master key if configured, else the upload key."""
+    if not key:
+        return False
+    if auth_service.master_keys:
+        return auth_service.validate_master_key(key)
+    return bool(config.UPLOAD_API_KEY) and key == config.UPLOAD_API_KEY
+
+
+def dashboard_authorized(auth_service) -> bool:
+    return bool(session.get("dashboard_ok")) or auth_service.is_master_unlocked()
+
+
+@main_bp.route("/dashboard", methods=["GET", "POST"])
+def dashboard():
+    """Analytics dashboard, gated by the master/upload key."""
+    auth_service = current_app.auth_service
+    analytics_service = current_app.analytics_service
+    config = current_app.config_obj
+
+    error = None
+    if request.method == "POST":
+        if dashboard_key_valid(auth_service, config, request.form.get("key", "")):
+            session["dashboard_ok"] = True
+            session.modified = True
+        else:
+            error = "Invalid key."
+
+    authorized = dashboard_authorized(auth_service)
+    summary = analytics_service.summary() if authorized else None
+    return render_template(
+        "dashboard.html",
+        title="Analytics",
+        authorized=authorized,
+        error=error,
+        summary=summary,
+        analytics_enabled=analytics_service.enabled,
+    )
 
 

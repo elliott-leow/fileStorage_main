@@ -33,27 +33,27 @@
                 {% endif %}
             </div>
             <div id="normal-actions" class="row gap-1 shrink-0">
-                <a href="/dashboard" class="icon-btn" title="Analytics dashboard" aria-label="Analytics dashboard">
+                <a href="/dashboard" class="icon-btn" data-tip="Dashboard" aria-label="Analytics dashboard">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a1 1 0 00-1-1H5a1 1 0 00-1 1v6a1 1 0 001 1h3a1 1 0 001-1zm0 0V9a1 1 0 011-1h4a1 1 0 011 1v10m-6 0a1 1 0 001 1h4a1 1 0 001-1m0 0V5a1 1 0 011-1h3a1 1 0 011 1v14a1 1 0 01-1 1h-3a1 1 0 01-1-1z"/></svg>
                 </a>
                 {% if master_key_configured %}
                     {% if master_unlocked %}
-                    <span class="icon-btn tint-warning locked" title="Master unlocked">
+                    <span class="icon-btn tint-warning locked" data-tip="Master unlocked">
                         <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2h-1V7a4 4 0 00-8 0v1H5V7a5 5 0 0110 0v2h.5"/></svg>
                     </span>
                     {% else %}
-                    <button id="master-key-btn" class="icon-btn tint-warning" title="Master unlock" aria-label="Master unlock">
+                    <button id="master-key-btn" class="icon-btn tint-warning" data-tip="Master unlock" aria-label="Master unlock">
                         <svg viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1a4.5 4.5 0 00-4.5 4.5V9H5a2 2 0 00-2 2v6a2 2 0 002 2h10a2 2 0 002-2v-6a2 2 0 00-2-2h-.5V5.5A4.5 4.5 0 0010 1zm3 8V5.5a3 3 0 10-6 0V9h6z" clip-rule="evenodd"/></svg>
                     </button>
                     {% endif %}
                 {% endif %}
                 {% if delete_key_configured %}
-                <button id="delete-mode-btn" class="icon-btn tint-danger" title="Delete mode" aria-label="Delete mode">
+                <button id="delete-mode-btn" class="icon-btn tint-danger" data-tip="Delete mode" aria-label="Delete mode">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                 </button>
                 {% endif %}
                 {% if hidden_key_configured %}
-                <button id="view-hidden-btn" class="icon-btn {% if show_hidden_files %}is-active{% endif %}" title="{% if show_hidden_files %}Hide hidden folders{% else %}View hidden folders{% endif %}" aria-label="Toggle hidden folders">
+                <button id="view-hidden-btn" class="icon-btn {% if show_hidden_files %}is-active{% endif %}" data-tip="{% if show_hidden_files %}Hide hidden folders{% else %}Show hidden folders{% endif %}" aria-label="Toggle hidden folders">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         {% if show_hidden_files %}
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
@@ -64,16 +64,16 @@
                     </svg>
                 </button>
                 {% endif %}
-                <button id="create-shortcut-btn" class="icon-btn tint-teal" title="Create shortcut" aria-label="Create shortcut">
+                <button id="create-shortcut-btn" class="icon-btn tint-teal" data-tip="Create shortcut" aria-label="Create shortcut">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
                 </button>
-                <button id="create-folder-btn" class="icon-btn tint-success" title="New folder" aria-label="New folder">
+                <button id="create-folder-btn" class="icon-btn tint-success" data-tip="New folder" aria-label="New folder">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                 </button>
-                <button id="upload-file-btn" class="icon-btn" title="Upload here" aria-label="Upload here">
+                <button id="upload-file-btn" class="icon-btn" data-tip="Upload here" aria-label="Upload here">
                     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                 </button>
-                <button id="theme-toggle" class="icon-btn" aria-label="Toggle theme">
+                <button id="theme-toggle" class="icon-btn" data-tip="Theme" aria-label="Toggle theme">
                     <span id="theme-icon">🌙</span>
                 </button>
             </div>
@@ -109,9 +109,16 @@
     </form>
 
     {% if permission_denied %}
-    <div class="alert alert-warn">
-        <strong>Access denied.</strong> Cannot list <code class="mono">/{{ current_path }}</code>.
-        {% if show_parent %}<a href="{{ parent_url }}">Go to parent</a>{% endif %}
+    <div class="card" style="max-width:460px;margin:5vh auto;padding:28px;text-align:center">
+        <div style="font-size:34px;line-height:1">🔒</div>
+        <h3 style="margin:10px 0 4px;font-size:17px;font-weight:700">Protected folder</h3>
+        <p class="subtext text-sm" style="margin:0 0 16px"><code class="mono">/{{ current_path }}</code> requires a key.</p>
+        <input type="password" id="accessPromptInput" class="input" placeholder="Folder key or master key" autofocus>
+        <div class="form-error" id="accessPromptError"></div>
+        <div class="row gap-2" style="justify-content:center;margin-top:14px">
+            {% if show_parent %}<a href="{{ parent_url }}" class="btn btn-ghost">Back</a>{% endif %}
+            <button type="button" id="accessPromptBtn" class="btn btn-primary">Unlock</button>
+        </div>
     </div>
     {% endif %}
 

@@ -1,7 +1,7 @@
 """
 Flask application factory for the file server.
 """
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 from werkzeug.exceptions import RequestEntityTooLarge
 
 from .config import get_config, Config
@@ -125,54 +125,40 @@ def _register_template_filters(app: Flask) -> None:
             return ""
 
 
+def _error_response(code, message, description):
+    """Return a JSON error for API/agent requests, else the HTML error page."""
+    fmt = request.args.get("format")
+    accept = request.headers.get("Accept", "")
+    if fmt == "json" or ("application/json" in accept and "text/html" not in accept):
+        return jsonify(error=message, code=code, description=description), code
+    return render_template(
+        "error.html", error_code=code, error_message=message, error_description=description
+    ), code
+
+
 def _register_error_handlers(app: Flask) -> None:
-    """Register error handlers."""
-    
+    """Register error handlers (HTML for browsers, JSON for API/agents)."""
+
     @app.errorhandler(404)
     def page_not_found(e):
-        return render_template(
-            "error.html",
-            error_code=404,
-            error_message="Page Not Found",
-            error_description=str(e)
-        ), 404
-    
+        return _error_response(404, "Page Not Found", str(e))
+
     @app.errorhandler(403)
     def forbidden(e):
-        return render_template(
-            "error.html",
-            error_code=403,
-            error_message="Forbidden",
-            error_description="You do not have permission to access this resource."
-        ), 403
-    
+        return _error_response(403, "Forbidden", "You do not have permission to access this resource.")
+
     @app.errorhandler(401)
     def unauthorized(e):
-        return render_template(
-            "error.html",
-            error_code=401,
-            error_message="Unauthorized",
-            error_description="Authentication required or failed."
-        ), 401
-    
+        return _error_response(401, "Unauthorized", "Authentication required or failed.")
+
     @app.errorhandler(500)
     def internal_server_error(e):
-        return render_template(
-            "error.html",
-            error_code=500,
-            error_message="Internal Server Error",
-            error_description="An unexpected error occurred."
-        ), 500
-    
+        return _error_response(500, "Internal Server Error", "An unexpected error occurred.")
+
     @app.errorhandler(413)
     @app.errorhandler(RequestEntityTooLarge)
     def request_entity_too_large(e):
-        return render_template(
-            "error.html",
-            error_code=413,
-            error_message="Payload Too Large",
-            error_description="The file exceeds the maximum allowed size."
-        ), 413
+        return _error_response(413, "Payload Too Large", "The file exceeds the maximum allowed size.")
 
 
 def _log_startup_info(app: Flask, config: Config) -> None:

@@ -23,6 +23,53 @@ const FileBrowser = {
         this.setupSort();
         this.setupPreview();
         this.setupKeyboardShortcuts();
+        this.setupAccessPrompt();
+    },
+
+    /**
+     * Inline unlock prompt shown when you land on a protected folder by URL
+     * (or it's hidden). Accepts the folder's own key OR the master key.
+     */
+    setupAccessPrompt() {
+        const input = document.getElementById('accessPromptInput');
+        const btn = document.getElementById('accessPromptBtn');
+        const err = document.getElementById('accessPromptError');
+        if (!input || !btn) return;
+
+        const submit = async () => {
+            const key = input.value;
+            if (!key) { if (err) err.textContent = 'Key required.'; return; }
+            btn.disabled = true;
+            if (err) err.textContent = '';
+            const path = this.config.currentPath;
+            try {
+                // 1) try as this folder's own key
+                let res = await fetch('/validate-key', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path, key: key }),
+                });
+                let result = await res.json();
+                if (res.ok && result.status === 'success') { location.reload(); return; }
+                // 2) fall back to the master key (unlocks everything)
+                res = await fetch('/validate-master-key', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: key }),
+                });
+                result = await res.json();
+                if (res.ok && result.status === 'success') { location.reload(); return; }
+                if (err) err.textContent = result.message || 'Invalid key.';
+                input.focus(); input.select();
+            } catch (e) {
+                if (err) err.textContent = 'Network error.';
+            } finally {
+                btn.disabled = false;
+            }
+        };
+
+        btn.addEventListener('click', submit);
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        });
     },
     
     /**

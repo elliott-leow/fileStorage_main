@@ -20,11 +20,13 @@ def main():
 
     app = create_app()
     ss = app.search_service
-    target = sys.argv[1] if len(sys.argv) > 1 else app.config_obj.PUBLIC_DIR
-    print(f"model={ss.model_name}  target={target}", flush=True)
+    args = [a for a in sys.argv[1:] if a != "--update"]
+    incremental = "--update" in sys.argv
+    target = args[0] if args else app.config_obj.PUBLIC_DIR
+    print(f"model={ss.model_name}  target={target}  mode={'update' if incremental else 'full'}", flush=True)
 
     t = time.time()
-    data = ss.build_index(target)
+    data = ss.update_index(target) if incremental else ss.build_index(target)
     if data is not None:
         n_files = len(set(m["path"] for m in data["metadata"]))
         print(

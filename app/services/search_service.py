@@ -89,33 +89,127 @@ def make_snippet(text: str, query: str, window: int = 40) -> str:
     return snippet
 
 
+import zipfile as _zipfile
+
+# Plain-text / code / config / markup formats read directly.
+_PLAIN_TEXT_EXTS = {
+    ".txt", ".text", ".md", ".markdown", ".rst", ".log", ".csv", ".tsv",
+    ".json", ".jsonl", ".ndjson", ".yaml", ".yml", ".toml", ".ini", ".cfg",
+    ".conf", ".properties", ".tex", ".bib", ".srt", ".vtt", ".sql", ".sh",
+    ".bash", ".zsh", ".bat", ".ps1", ".py", ".pyw", ".ipynb", ".js", ".mjs",
+    ".cjs", ".ts", ".tsx", ".jsx", ".java", ".kt", ".scala", ".c", ".h",
+    ".cpp", ".cc", ".hpp", ".cxx", ".cs", ".go", ".rs", ".rb", ".php",
+    ".swift", ".r", ".pl", ".lua", ".vim", ".css", ".scss", ".less",
+    ".gradle", ".tcl", ".asm", ".f90", ".jl", ".dart", ".hs", ".clj",
+    ".ex", ".exs", ".erl", ".sty", ".cls",
+}
+# Markup formats: read, then strip tags.
+_MARKUP_EXTS = {".html", ".htm", ".xhtml", ".xml", ".svg", ".rss", ".atom", ".fb2"}
+# Office Open XML (zip of XML) -> which members hold the text.
+_OOXML = {
+    ".docx": lambda n: n == "word/document.xml" or n.startswith(("word/header", "word/footer")),
+    ".pptx": lambda n: n.startswith("ppt/slides/slide") and n.endswith(".xml"),
+    ".xlsx": lambda n: n == "xl/sharedStrings.xml",
+}
+# OpenDocument (zip) and EPUB (zip of XHTML).
+_ODF_EXTS = {".odt", ".odp", ".ods", ".odg"}
+_EBOOK_ZIP_EXTS = {".epub"}
+_MOBI_EXTS = {".mobi", ".azw", ".azw3", ".prc"}
+
+ALL_EXTRACTABLE_EXTS = sorted(
+    _PLAIN_TEXT_EXTS | _MARKUP_EXTS | {".pdf"}
+    | set(_OOXML) | _ODF_EXTS | _EBOOK_ZIP_EXTS | _MOBI_EXTS
+)
+
+
+def _strip_markup(data) -> str:
+    """Turn HTML/XML bytes-or-str into readable plain text."""
+    s = data.decode("utf-8", "ignore") if isinstance(data, (bytes, bytearray)) else data
+    s = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", s, flags=re.I | re.S)
+    s = re.sub(r"</(w:p|a:p|p|text:p|text:h|div|li|tr|h[1-6]|br)\s*>", "\n", s, flags=re.I)
+    s = re.sub(r"<(br|w:br|a:br)\s*/?>", "\n", s, flags=re.I)
+    s = re.sub(r"<[^>]+>", " ", s)
+    s = html.unescape(s)
+    s = re.sub(r"[ \t\r\f]+", " ", s)
+    s = re.sub(r"\n[ \t]*\n+", "\n", s)
+    return s.strip()
+
+
+def _zip_text(path: str, want) -> Optional[str]:
+    """Concatenate stripped text from zip members matching `want(name)`."""
+    parts = []
+    try:
+        with _zipfile.ZipFile(path) as z:
+            for name in z.namelist():
+                if want(name):
+                    try:
+                        parts.append(_strip_markup(z.read(name)))
+                    except Exception:
+                        pass
+    except Exception:
+        return None
+    text = "\n".join(p for p in parts if p)
+    return text or None
+
+
+def _extract_pdf(path: str) -> Optional[str]:
+    try:
+        import pypdf
+    except ImportError:
+        return None
+    try:
+        out = [t for page in pypdf.PdfReader(path).pages if (t := page.extract_text())]
+        return "\n".join(out)
+    except Exception:
+        return None
+
+
+def _extract_mobi(path: str) -> Optional[str]:
+    try:
+        import mobi
+    except ImportError:
+        return None
+    import shutil
+    tmpdir = None
+    try:
+        tmpdir, out_path = mobi.extract(path)
+        low = out_path.lower()
+        if low.endswith(".epub"):
+            return _zip_text(out_path, lambda n: n.lower().endswith((".xhtml", ".html", ".htm")))
+        with open(out_path, "r", encoding="utf-8", errors="ignore") as f:
+            return _strip_markup(f.read())
+    except Exception:
+        return None
+    finally:
+        if tmpdir:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
 def extract_text_file(filepath: str, max_file_size_mb: int) -> Optional[str]:
-    """Module-level text extraction (used by parallel index builds)."""
-    _, ext = os.path.splitext(filepath)
-    ext = ext.lower()
+    """Extract plain text from any supported format (used by parallel builds)."""
+    ext = os.path.splitext(filepath)[1].lower()
     try:
         if os.path.getsize(filepath) > max_file_size_mb * 1024 * 1024:
             return None
     except OSError:
         return None
     try:
-        if ext in (".txt", ".md", ".markdown"):
+        if ext in _PLAIN_TEXT_EXTS:
             with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                 return f.read()
+        if ext in _MARKUP_EXTS:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                return _strip_markup(f.read())
         if ext == ".pdf":
-            try:
-                import pypdf
-            except ImportError:
-                return None
-            text = []
-            try:
-                for page in pypdf.PdfReader(filepath).pages:
-                    t = page.extract_text()
-                    if t:
-                        text.append(t)
-            except Exception:
-                return None
-            return "\n".join(text)
+            return _extract_pdf(filepath)
+        if ext in _OOXML:
+            return _zip_text(filepath, _OOXML[ext])
+        if ext in _ODF_EXTS:
+            return _zip_text(filepath, lambda n: n == "content.xml")
+        if ext in _EBOOK_ZIP_EXTS:
+            return _zip_text(filepath, lambda n: n.lower().endswith((".xhtml", ".html", ".htm")))
+        if ext in _MOBI_EXTS:
+            return _extract_mobi(filepath)
     except Exception:
         return None
     return None
@@ -378,25 +472,23 @@ class SearchService:
             for i in range(0, len(words), stride)
         ]
 
-    def build_index(self, public_dir: str) -> Optional[Dict[str, Any]]:
-        if not self._ensure_model():
-            print("Model not loaded; cannot build index.")
-            return None
-        print("Building semantic index...")
-        start = time.time()
-        texts: List[str] = []
-        metadata: List[Dict[str, Any]] = []
-
-        # Collect eligible files
-        file_list = []
+    def _walk_files(self, public_dir: str, exclude: Optional[set] = None) -> List[str]:
+        """All extractable files under public_dir (optionally excluding rel paths)."""
+        out = []
         for root, _, files in os.walk(public_dir):
             for filename in files:
-                _, ext = os.path.splitext(filename)
-                if ext.lower() in self.supported_extensions:
-                    file_list.append(os.path.join(root, filename))
-        print(f"Extracting text from {len(file_list)} files across CPU cores...")
+                if os.path.splitext(filename)[1].lower() not in ALL_EXTRACTABLE_EXTS:
+                    continue
+                ap = os.path.join(root, filename)
+                if exclude is not None:
+                    rel = os.path.relpath(ap, public_dir).replace(os.sep, "/")
+                    if rel in exclude:
+                        continue
+                out.append(ap)
+        return out
 
-        # Parallel text extraction (spawn context avoids torch/fork deadlocks)
+    def _parallel_extract(self, file_list: List[str]):
+        """Extract text from many files across CPU cores (spawn avoids fork issues)."""
         import concurrent.futures
         import multiprocessing as _mp
         args = [(p, self.max_file_size_mb) for p in file_list]
@@ -405,51 +497,26 @@ class SearchService:
             with concurrent.futures.ProcessPoolExecutor(
                 max_workers=max(1, os.cpu_count() or 2), mp_context=ctx
             ) as ex:
-                results = list(ex.map(_extract_worker, args, chunksize=4))
+                return list(ex.map(_extract_worker, args, chunksize=4))
         except Exception as e:
             print(f"Parallel extraction failed ({e}); using sequential.")
-            results = [_extract_worker(a) for a in args]
+            return [_extract_worker(a) for a in args]
 
+    def _chunks_from(self, results, public_dir: str):
+        """Turn (path, text) results into (texts, metadata)."""
+        texts, metadata = [], []
         for filepath, content in results:
             if not content:
                 continue
             rel_path = os.path.relpath(filepath, public_dir).replace(os.sep, "/")
-            chunks = cap_chunks(self._chunk_text(content), self.max_chunks_per_file)
-            for i, chunk in enumerate(chunks):
+            for i, chunk in enumerate(cap_chunks(self._chunk_text(content), self.max_chunks_per_file)):
                 texts.append(chunk)
                 metadata.append({"path": rel_path, "chunk_index": i, "text": chunk})
-        print(f"Extracted {len(texts)} chunks from {len(set(m['path'] for m in metadata))} files; embedding...")
+        return texts, metadata
 
-        dim = self.model.get_sentence_embedding_dimension()
+    def _embed_loop(self, texts, metadata, embeddings, start_at, dim, t0):
+        """Embed rows [start_at:] in checkpointed batches; save after each."""
         total = len(texts)
-
-        if total == 0:
-            data = {"version": 2, "model": self.model_name, "dim": dim,
-                    "embeddings": np.zeros((0, dim), dtype=np.float32),
-                    "metadata": [], "total": 0, "embedded_count": 0, "complete": True}
-            self._atomic_save(data)
-            self.index_data = data
-            self._build_bm25()
-            return data
-
-        embeddings = np.zeros((total, dim), dtype=np.float32)
-        start_at = 0
-
-        # Resume an interrupted build if the on-disk index matches this corpus.
-        prev = self._read_index_file()
-        if (prev and prev.get("model") == self.model_name and prev.get("total") == total
-                and isinstance(prev.get("embeddings"), np.ndarray)
-                and prev["embeddings"].shape == (total, dim)
-                and len(prev.get("metadata", [])) == total
-                and all(prev["metadata"][k]["path"] == metadata[k]["path"]
-                        for k in range(0, total, max(1, total // 50)))):
-            embeddings = prev["embeddings"].astype(np.float32)
-            start_at = min(int(prev.get("embedded_count", 0)), total)
-            if start_at:
-                print(f"Resuming embedding from {start_at}/{total}.", flush=True)
-
-        # Embed in batches, checkpointing after each so the long build is
-        # crash-resilient and searchable while still in progress.
         BATCH = 2000
         for s in range(start_at, total, BATCH):
             e = min(s + BATCH, total)
@@ -462,16 +529,97 @@ class SearchService:
             except Exception as ex:
                 print(f"Error saving checkpoint: {ex}")
             print(f"Embedded {e}/{total} ({100 * e / total:.1f}%) "
-                  f"elapsed={int(time.time() - start)}s", flush=True)
-
-        # Finalize (serve only the embedded rows, which is all of them now).
+                  f"elapsed={int(time.time() - t0)}s", flush=True)
         self.index_data = {"version": 2, "model": self.model_name, "dim": dim,
                            "embeddings": embeddings, "metadata": metadata,
                            "total": total, "embedded_count": total, "complete": True}
         self._build_bm25()
         print(f"Indexed {len(set(m['path'] for m in metadata))} files / "
-              f"{total} chunks in {time.time() - start:.1f}s.")
+              f"{total} chunks in {time.time() - t0:.1f}s.")
         return self.index_data
+
+    def build_index(self, public_dir: str) -> Optional[Dict[str, Any]]:
+        if not self._ensure_model():
+            print("Model not loaded; cannot build index.")
+            return None
+        start = time.time()
+        file_list = self._walk_files(public_dir)
+        print(f"Extracting text from {len(file_list)} files across CPU cores...")
+        texts, metadata = self._chunks_from(self._parallel_extract(file_list), public_dir)
+        print(f"Extracted {len(texts)} chunks from "
+              f"{len(set(m['path'] for m in metadata))} files; embedding...")
+
+        dim = self.model.get_sentence_embedding_dimension()
+        total = len(texts)
+        if total == 0:
+            data = {"version": 2, "model": self.model_name, "dim": dim,
+                    "embeddings": np.zeros((0, dim), dtype=np.float32),
+                    "metadata": [], "total": 0, "embedded_count": 0, "complete": True}
+            self._atomic_save(data)
+            self.index_data = data
+            self._build_bm25()
+            return data
+
+        embeddings = np.zeros((total, dim), dtype=np.float32)
+        start_at = 0
+        prev = self._read_index_file()
+        if (prev and prev.get("model") == self.model_name and prev.get("total") == total
+                and isinstance(prev.get("embeddings"), np.ndarray)
+                and prev["embeddings"].shape == (total, dim)
+                and len(prev.get("metadata", [])) == total
+                and all(prev["metadata"][k]["path"] == metadata[k]["path"]
+                        for k in range(0, total, max(1, total // 50)))):
+            embeddings = prev["embeddings"].astype(np.float32)
+            start_at = min(int(prev.get("embedded_count", 0)), total)
+            if start_at:
+                print(f"Resuming embedding from {start_at}/{total}.", flush=True)
+        return self._embed_loop(texts, metadata, embeddings, start_at, dim, start)
+
+    def update_index(self, public_dir: str) -> Optional[Dict[str, Any]]:
+        """Incrementally index only files not already in the index (append + embed)."""
+        if not self._ensure_model():
+            return None
+        start = time.time()
+        prev = self._read_index_file()
+
+        # Resume an interrupted build/update instead of starting fresh.
+        if (prev and prev.get("model") == self.model_name and not prev.get("complete", True)
+                and isinstance(prev.get("embeddings"), np.ndarray)):
+            texts = [m["text"] for m in prev["metadata"]]
+            print(f"Resuming interrupted build at {prev.get('embedded_count', 0)}/{len(texts)}.")
+            return self._embed_loop(texts, prev["metadata"], prev["embeddings"].astype(np.float32),
+                                    int(prev.get("embedded_count", 0)), prev["dim"], start)
+
+        if not prev or prev.get("model") != self.model_name:
+            print("No matching complete index; doing a full build.")
+            return self.build_index(public_dir)
+
+        indexed = set(m["path"] for m in prev["metadata"])
+        new_files = self._walk_files(public_dir, exclude=indexed)
+        print(f"{len(new_files)} new/unindexed files found.")
+        if not new_files:
+            self.index_data = prev
+            self._build_bm25()
+            try:
+                self._index_mtime = os.path.getmtime(self.index_file_path)
+            except OSError:
+                pass
+            return prev
+
+        new_texts, new_meta = self._chunks_from(self._parallel_extract(new_files), public_dir)
+        if not new_texts:
+            print("No new extractable content.")
+            return prev
+        print(f"Appending {len(new_texts)} new chunks to {prev['embeddings'].shape[0]} existing...")
+
+        dim = prev["dim"]
+        texts = [m["text"] for m in prev["metadata"]] + new_texts
+        metadata = list(prev["metadata"]) + new_meta
+        embeddings = np.vstack([
+            prev["embeddings"].astype(np.float32),
+            np.zeros((len(new_texts), dim), dtype=np.float32),
+        ])
+        return self._embed_loop(texts, metadata, embeddings, prev["embeddings"].shape[0], dim, start)
 
     # --------------------------------------------------------------- search
 

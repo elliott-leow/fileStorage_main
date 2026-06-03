@@ -49,7 +49,10 @@ class Config:
     SEARCH_W_POPULARITY = float(os.getenv("SEARCH_W_POPULARITY", 0.15))  # access freq/recency
     SEARCH_W_TRAJECTORY = float(os.getenv("SEARCH_W_TRAJECTORY", 0.15))  # P(file | path)
 
-    # File processing settings
+    # File processing settings. The indexer auto-extracts text from every
+    # supported format (PDF, Office docx/pptx/xlsx, OpenDocument, EPUB/MOBI,
+    # HTML/XML, and all plain-text/code formats) — see
+    # search_service.ALL_EXTRACTABLE_EXTS for the authoritative list.
     SUPPORTED_EXTENSIONS = [".txt", ".pdf", ".md", ".markdown"]
     MAX_CHUNK_SIZE = 256   # Words per chunk (good context; fits bge's 512-token limit)
     CHUNK_OVERLAP = 64     # Words of overlap between consecutive chunks

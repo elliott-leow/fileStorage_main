@@ -56,7 +56,7 @@ class Config:
     SUPPORTED_EXTENSIONS = [".txt", ".pdf", ".md", ".markdown"]
     MAX_CHUNK_SIZE = 256   # Words per chunk (good context; fits bge's 512-token limit)
     CHUNK_OVERLAP = 64     # Words of overlap between consecutive chunks
-    MAX_FILE_SIZE_MB = 50  # Skip files larger than this
+    MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", 250))  # skip files larger than this
     # Cap chunks per file (evenly sampled). 0 = unlimited (full content coverage,
     # including big textbooks) — slower build but every passage is searchable.
     MAX_CHUNKS_PER_FILE = int(os.getenv("MAX_CHUNKS_PER_FILE", 0))

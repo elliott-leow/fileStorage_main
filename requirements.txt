@@ -21,3 +21,9 @@ pypdf>=3.0.0
 
 # Ebook extraction (.mobi/.azw)
 mobi>=0.3
+
+# OCR (scanned PDFs + images)
+pymupdf>=1.23
+pytesseract>=0.3
+Pillow>=9
+# system: tesseract-ocr (apt)

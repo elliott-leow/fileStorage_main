@@ -115,10 +115,17 @@ _OOXML = {
 _ODF_EXTS = {".odt", ".odp", ".ods", ".odg"}
 _EBOOK_ZIP_EXTS = {".epub"}
 _MOBI_EXTS = {".mobi", ".azw", ".azw3", ".prc"}
+# Image formats (OCR'd via Tesseract).
+_IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tif", ".tiff", ".webp", ".ppm", ".pgm"}
+
+# OCR settings (env-tunable). OCR is attempted for images and for PDFs with no
+# usable text layer; it no-ops gracefully if tesseract/pymupdf aren't installed.
+_OCR_ENABLED = os.getenv("ENABLE_OCR", "true").lower() == "true"
+_OCR_DPI = int(os.getenv("OCR_DPI", "200"))
 
 ALL_EXTRACTABLE_EXTS = sorted(
     _PLAIN_TEXT_EXTS | _MARKUP_EXTS | {".pdf"}
-    | set(_OOXML) | _ODF_EXTS | _EBOOK_ZIP_EXTS | _MOBI_EXTS
+    | set(_OOXML) | _ODF_EXTS | _EBOOK_ZIP_EXTS | _MOBI_EXTS | _IMAGE_EXTS
 )
 
 
@@ -152,16 +159,66 @@ def _zip_text(path: str, want) -> Optional[str]:
     return text or None
 
 
-def _extract_pdf(path: str) -> Optional[str]:
-    try:
-        import pypdf
-    except ImportError:
+def _ocr_image_path(path: str) -> Optional[str]:
+    """OCR an image file with Tesseract (None if OCR unavailable/empty)."""
+    if not _OCR_ENABLED:
         return None
     try:
-        out = [t for page in pypdf.PdfReader(path).pages if (t := page.extract_text())]
-        return "\n".join(out)
+        import pytesseract
+        from PIL import Image
     except Exception:
         return None
+    try:
+        with Image.open(path) as img:
+            text = pytesseract.image_to_string(img)
+        text = (text or "").strip()
+        return text or None
+    except Exception:
+        return None
+
+
+def _ocr_pdf(path: str) -> Optional[str]:
+    """Render each PDF page and OCR it (for scanned/image-only PDFs)."""
+    if not _OCR_ENABLED:
+        return None
+    try:
+        import io
+        import fitz  # PyMuPDF
+        import pytesseract
+        from PIL import Image
+    except Exception:
+        return None
+    out = []
+    try:
+        doc = fitz.open(path)
+        try:
+            for page in doc:
+                pix = page.get_pixmap(dpi=_OCR_DPI)
+                img = Image.open(io.BytesIO(pix.tobytes("png")))
+                try:
+                    t = pytesseract.image_to_string(img)
+                finally:
+                    img.close()
+                if t and t.strip():
+                    out.append(t)
+        finally:
+            doc.close()
+    except Exception:
+        return None
+    return "\n".join(out) or None
+
+
+def _extract_pdf(path: str) -> Optional[str]:
+    """PDF text layer if present, otherwise OCR the rendered pages."""
+    text = None
+    try:
+        import pypdf
+        text = "\n".join(t for page in pypdf.PdfReader(path).pages if (t := page.extract_text()))
+    except Exception:
+        text = None
+    if text and len(text.strip()) >= 100:
+        return text
+    return _ocr_pdf(path) or (text or None)
 
 
 def _extract_mobi(path: str) -> Optional[str]:
@@ -202,6 +259,8 @@ def extract_text_file(filepath: str, max_file_size_mb: int) -> Optional[str]:
                 return _strip_markup(f.read())
         if ext == ".pdf":
             return _extract_pdf(filepath)
+        if ext in _IMAGE_EXTS:
+            return _ocr_image_path(filepath)
         if ext in _OOXML:
             return _zip_text(filepath, _OOXML[ext])
         if ext in _ODF_EXTS:
